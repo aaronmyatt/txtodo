@@ -2,10 +2,11 @@
 //! pass, split out of `config.rs` for that file's line budget.
 
 use crate::CliError;
-use crate::config::Paths;
+use crate::cli::Cli;
+use crate::config::{self, Config, Env, Paths};
 use std::path::Path;
 
-/// Points `paths` at `list`, a list inside the workspace named by the hidden `--list` flag (what
+/// Points `paths` at `list`, a list inside the workspace named by the hidden `--sublist` flag (what
 /// `sub` passes), instead of the root list. The workspace stays `paths.dir`, so the daemon is
 /// asked about the workspace that holds the list, never about the list's own folder, which it
 /// would register as a second workspace (sync-drift line 3). `report.txt` goes beside the list,
@@ -13,7 +14,7 @@ use std::path::Path;
 pub(crate) fn scope_to_list(paths: &mut Paths, list: &str) -> Result<(), CliError> {
     if !valid_root_list(list) {
         return Err(CliError::Message(format!(
-            "txtodo: --list {list:?} is not a list inside the workspace (relative, `/` \
+            "txtodo: --sublist {list:?} is not a list inside the workspace (relative, `/` \
              separators, no `.`/`..`, no `:`, not under .txtodo, not notes.md)"
         )));
     }
@@ -26,6 +27,36 @@ pub(crate) fn scope_to_list(paths: &mut Paths, list: &str) -> Result<(), CliErro
         "the list is in the workspace"
     );
     Ok(())
+}
+
+/// Every path this run uses: `config::resolve`'s, with the folder of `--list NAME` (`list_dir`) in
+/// place of `--dir`, then a `--sublist` (what `sub` passes) in place of the root list, inside the
+/// same workspace.
+pub(crate) fn resolve_paths(
+    cli: &Cli,
+    list_dir: Option<&Path>,
+    env: &Env,
+    config: &Config,
+    config_file: std::path::PathBuf,
+) -> Result<Paths, CliError> {
+    let mut paths = config::resolve(
+        env,
+        config::ResolveFlags {
+            dir: list_dir.and_then(Path::to_str).or(cli.dir.as_deref()),
+            sync_dir: cli.sync_dir.as_deref(),
+            relay: cli.relay.as_deref(),
+        },
+        config,
+        config_file,
+    );
+    if let Some(list) = cli.sublist.as_deref() {
+        scope_to_list(&mut paths, list)?;
+    }
+    debug_assert!(
+        paths.todo.ends_with(&paths.todo_file),
+        "resolve names the todo file"
+    );
+    Ok(paths)
 }
 
 /// The workspace's root list for direct-file mode: `todo_file` from `<dir>/txtodo.toml`, else

@@ -21,6 +21,8 @@ pub enum Action {
     /// `W`: list the workspaces and their open counts, then open the popup (task
     /// `tui-revamp/tui-shell`).
     OpenWorkspaceMenu,
+    /// `m`/`c`: read the workspace's lists, then open the list picker (`list_picker.rs`).
+    OpenListPicker(crate::list_picker::PickMode),
     /// Put this text on the clipboard (OSC 52): a refused edit, a new token's secret.
     Copy(String),
     /// `u` or a toast's Undo: the daemon's `Undo` of the newest ops (this many) to this document,

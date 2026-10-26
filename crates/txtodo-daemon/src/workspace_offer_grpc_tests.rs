@@ -80,7 +80,7 @@ async fn pending_offers_lists_what_was_recorded() {
 }
 
 #[tokio::test]
-async fn accept_offer_adopts_it_and_it_stops_being_pending() {
+async fn accepting_an_offer_that_is_not_a_list_is_refused_and_it_stops_being_pending() {
     let (_registry_dir, identity, svc) = service();
     let offered = workspace(2);
     identity
@@ -93,27 +93,17 @@ async fn accept_offer_adopts_it_and_it_stops_being_pending() {
         })
         .unwrap();
 
-    let info = svc
+    let refused = svc
         .workspace_accept_offer(Request::new(pb::WorkspaceAcceptOfferRequest {
             offering_device: device(1).to_string(),
             workspace_id: offered.to_string(),
         }))
         .await
-        .unwrap()
-        .into_inner();
-    assert_eq!(
-        info.workspace_id,
-        offered.to_string(),
-        "the offered id, not a freshly minted one"
-    );
-    assert!(info.is_remote, "accepted into the mirror folder: {info:?}");
-    assert!(
-        info.root.ends_with(&format!("remote/{offered}")),
-        "never a caller-chosen directory: {}",
-        info.root
-    );
+        .unwrap_err();
+    assert_eq!(refused.code(), tonic::Code::FailedPrecondition);
+    assert!(refused.message().contains("only a list"), "{refused}");
 
-    // It now shows up as a real, locally-registered workspace...
+    // Nothing was made, and the offer is consumed all the same.
     let listed = svc
         .workspace_list(Request::new(pb::WorkspaceListRequest {}))
         .await
@@ -123,10 +113,8 @@ async fn accept_offer_adopts_it_and_it_stops_being_pending() {
         listed
             .workspaces
             .iter()
-            .any(|w| w.workspace_id == offered.to_string())
+            .all(|w| w.workspace_id != offered.to_string())
     );
-
-    // ...and is no longer pending.
     let pending = svc
         .workspace_pending_offers(Request::new(pb::WorkspacePendingOffersRequest {}))
         .await

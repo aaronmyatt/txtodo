@@ -1,0 +1,5 @@
+x 2026-10-11 2026-10-11 daemon: Watch ops carry their source (the client that made them), as History's do; today it is empty +m11 @daemon — handle::Change carries the commit's source; op_source.rs pins it
+x 2026-10-11 2026-10-11 Pure debounce + filter: ops from Watch in, one notice out (own device+source dropped, 3 s window, kind → verb); unit tests +m11 @desktop — txtodo_core::notice, Rust not TS so desktop and TUI share it; see notes.md
+x 2026-10-11 2026-10-11 TUI: the same notice as a toast +m11 @tui — app_notices.rs; the TUI now watches every list; known gap: two TUIs never notify each other
+x 2026-10-11 2026-10-11 desktop: OS notification from the notice while the window is unfocused; Settings toggle, default on +m11 @desktop — decided (agent): tauri-plugin-notification; notify.rs + Settings toggle; known gap: first-show permission prompt untried on a real bundle
+x 2026-10-11 2026-10-11 Complete the parent line in ./todo.txt +m11

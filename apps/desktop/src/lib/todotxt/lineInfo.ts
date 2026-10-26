@@ -23,12 +23,13 @@ export interface CompletedLineInfo {
 }
 
 const ISO_DATE = "\\d{4}-\\d{2}-\\d{2}";
-// `x` + completion date + optional creation date. Lenient on purpose: a hand-edited line that
-// merely starts with "x " but has no valid date is not ours to reject here (that's the popover's
-// strict/lenient validation, plan §3.2), it's just also not "completed" for styling purposes.
-const COMPLETED_LINE = new RegExp(`^x ${ISO_DATE}(?: ${ISO_DATE})?(?: |$)`);
+// `x` as its own word, then an optional `(P)` and up to two dates (completion, creation). The same
+// rule as the core's lenient parse (`crates/txtodo-core/src/parse.rs`: a leading `x` word is
+// done; a missing date is only the `NO_COMPLETION_DATE` quirk), so a hand-typed `x buy milk` greys
+// out too (root todo 2026-10-11). `xylophone` is not done: the `x` must end at a space or the end.
+const COMPLETED_LINE = new RegExp(`^x(?: \\([A-Z]\\))?(?: ${ISO_DATE}){0,2}(?: |$)`);
 
-/** Null when `text` isn't a completed line (doesn't start with `x` + a completion date). */
+/** Null when `text` isn't a completed line (doesn't start with the word `x`). */
 export function completedLineInfo(text: string): CompletedLineInfo | null {
 	const match = COMPLETED_LINE.exec(text);
 	return match ? { descriptionStart: match[0].length } : null;

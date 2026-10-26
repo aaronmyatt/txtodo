@@ -2,7 +2,6 @@
 //! and a real `WorkspaceCatalog`, offers seeded straight into the offer registry the way the
 //! control channel records them.
 
-use std::path::Path;
 use std::sync::Arc;
 
 use txtodo_model::{DeviceId, IdentityMode, Ulid};
@@ -14,13 +13,13 @@ use crate::workspace_catalog::{OpenArgs, WorkspaceCatalog};
 use crate::workspace_offer_registry::PendingOffer;
 use crate::workspace_registry::WorkspaceRegistry;
 
-struct Fixture {
+pub(crate) struct Fixture {
     _dirs: tempfile::TempDir,
-    identity: Arc<DeviceIdentity>,
-    catalog: WorkspaceCatalog,
+    pub(crate) identity: Arc<DeviceIdentity>,
+    pub(crate) catalog: WorkspaceCatalog,
 }
 
-fn fixture() -> Fixture {
+pub(crate) fn fixture() -> Fixture {
     let dirs = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
     let identity = Arc::new(
         DeviceIdentity::open_in_memory(dirs.path(), &FakeClock::new(1_000))
@@ -73,39 +72,28 @@ fn root_of(f: &Fixture, id: WorkspaceId) -> Option<std::path::PathBuf> {
         .map(|e| e.root)
 }
 
-// A workspace open spawns its actors on the ambient runtime.
-#[tokio::test]
-async fn an_offer_is_mirrored_into_the_remote_folder_opened_and_consumed() {
+/// Only a list is made from an offer (ADR 0043). A plain id is a repo or an older build's offer, and
+/// a default alias is the old foreign-default mirror: both are consumed and ignored.
+#[test]
+fn an_offer_that_is_not_a_list_is_consumed_and_ignored() {
     let f = fixture();
-    let id = workspace(0x0190_0000_0000_0000_0000_0000_0000_0007);
-    offer(&f, 1, id);
-
-    assert_eq!(f.catalog.mirror_pending_offers(), 1);
-
-    let root = root_of(&f, id).unwrap_or_else(|| panic!("mirror not registered"));
-    assert!(root.ends_with(Path::new("remote").join(id.to_string())));
-    assert!(root.join("todo.txt").is_file(), "starts with an empty list");
-    assert!(f.catalog.is_remote_root(&root));
-    assert!(
-        f.catalog.load_state(id).is_some(),
-        "opened, so sync routes it"
-    );
+    let alias = workspace(0x019A_DEFA_0177_1111_0000_0000_0000_0002);
+    for (device, id) in [
+        (1, workspace(0x0190_0000_0000_0000_0000_0000_0000_0007)),
+        (2, alias),
+    ] {
+        offer(&f, device, id);
+        assert_eq!(f.catalog.mirror_pending_offers(), 0);
+        assert!(root_of(&f, id).is_none(), "no mirror made");
+    }
     assert!(f.identity.workspace_offers().list().is_empty(), "consumed");
-}
-
-// A workspace open spawns its actors on the ambient runtime.
-#[tokio::test]
-async fn a_re_offer_of_a_known_workspace_changes_nothing() {
-    let f = fixture();
-    let id = workspace(0x0190_0000_0000_0000_0000_0000_0000_0008);
-    offer(&f, 1, id);
-    assert_eq!(f.catalog.mirror_pending_offers(), 1);
-
-    // The same peer on its next session, and a second peer that mirrored it too.
-    offer(&f, 1, id);
-    offer(&f, 2, id);
-    assert_eq!(f.catalog.mirror_pending_offers(), 0);
-    assert!(f.identity.workspace_offers().list().is_empty());
+    assert!(
+        !f.catalog
+            .remote_root
+            .get()
+            .is_some_and(|r| std::fs::read_dir(r).is_ok_and(|mut d| d.next().is_some())),
+        "no folder in remote/"
+    );
 }
 
 #[test]
@@ -127,51 +115,6 @@ fn a_workspace_of_our_own_offered_back_is_not_mirrored() {
     );
 }
 
-// A workspace open spawns its actors on the ambient runtime.
-#[tokio::test]
-async fn a_removed_mirror_is_not_mirrored_again() {
-    let f = fixture();
-    let id = workspace(0x0190_0000_0000_0000_0000_0000_0000_0009);
-    offer(&f, 1, id);
-    assert_eq!(f.catalog.mirror_pending_offers(), 1);
-    assert!(
-        f.catalog
-            .remove_registered(id)
-            .unwrap_or_else(|e| panic!("remove: {e}"))
-    );
-
-    offer(&f, 1, id);
-    assert_eq!(f.catalog.mirror_pending_offers(), 0);
-    assert!(root_of(&f, id).is_none());
-}
-
-/// sync-drift line 4: a mirror lands only in an empty folder. One left behind with lines in it
-/// (a registry reset, say) is refused, named, and left alone.
-#[test]
-fn a_mirror_folder_left_with_lines_in_it_is_refused_and_left_alone() {
-    let f = fixture();
-    let id = workspace(0x0190_0000_0000_0000_0000_0000_0000_000a);
-    let remote = f.catalog.remote_root.get().cloned();
-    let dir = remote
-        .unwrap_or_else(|| panic!("no remote root"))
-        .join(id.to_string());
-    std::fs::create_dir_all(&dir).unwrap_or_else(|e| panic!("mkdir: {e}"));
-    std::fs::write(dir.join("todo.txt"), "(A) left behind\n").unwrap_or_else(|e| panic!("{e}"));
-    offer(&f, 1, id);
-
-    let err = f
-        .catalog
-        .accept_offer(DeviceId::new(Ulid::from_u128(1)), id)
-        .expect_err("a folder with lines is not mirrored into");
-    assert_eq!(err.code(), tonic::Code::FailedPrecondition);
-    assert!(err.message().contains(&dir.display().to_string()), "{err}");
-    assert!(root_of(&f, id).is_none(), "not registered");
-    assert_eq!(
-        std::fs::read_to_string(dir.join("todo.txt")).unwrap_or_default(),
-        "(A) left behind\n"
-    );
-}
-
 #[test]
 fn a_declined_offer_is_ignored_when_it_comes_again() {
     let f = fixture();
@@ -187,73 +130,7 @@ fn a_declined_offer_is_ignored_when_it_comes_again() {
     assert_eq!(f.catalog.mirror_pending_offers(), 0);
 }
 
-#[tokio::test]
-async fn the_mirror_task_picks_up_an_offer_without_being_asked() {
-    let f = fixture();
-    let catalog = Arc::new(f.catalog);
-    let task = catalog.spawn_offer_mirror();
-    let id = workspace(0x0190_0000_0000_0000_0000_0000_0000_000B);
-    f.identity
-        .workspace_offers()
-        .record(PendingOffer {
-            offering_device: DeviceId::new(Ulid::from_u128(1)),
-            workspace_id: id,
-            name: "project".to_string(),
-            offered_at_ms: 1_000,
-        })
-        .unwrap_or_else(|e| panic!("record offer: {e}"));
-
-    // Generous: a workspace open can take 20 s+ on this machine when it is busy.
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
-    while catalog.load_state(id).is_none() {
-        assert!(std::time::Instant::now() < deadline, "never mirrored");
-        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-    }
-    task.abort();
-}
-
-/// Task `default-workspace-pairing-consent`: a peer's default arrives under its alias. From an own
-/// device it is skipped (the default already merges); from any other device it is mirrored as a
-/// Remote workspace, apart from this device's own default.
-#[tokio::test]
-async fn a_peers_default_alias_is_mirrored_only_from_a_device_that_is_not_own() {
-    let f = fixture();
-    let (own, foreign) = (
-        DeviceId::new(Ulid::from_u128(21)),
-        DeviceId::new(Ulid::from_u128(22)),
-    );
-    register(&f, own, true);
-    register(&f, foreign, false);
-    let alias = crate::default_workspace::default_alias;
-    offer(&f, 21, alias(own));
-    offer(&f, 22, alias(foreign));
-
-    assert_eq!(f.catalog.mirror_pending_offers(), 1);
-    assert!(
-        root_of(&f, alias(own)).is_none(),
-        "own default: merged, not mirrored"
-    );
-    let root = root_of(&f, alias(foreign)).unwrap_or_else(|| panic!("foreign default mirrored"));
-    assert!(f.catalog.is_remote_root(&root));
-}
-
-/// A foreign peer mirrors this device's default and offers it back under this device's own alias:
-/// never mirrored here, since the real default already answers to that alias.
-#[test]
-fn this_devices_own_default_alias_offered_back_is_not_mirrored() {
-    let f = fixture();
-    let mine = crate::default_workspace::default_alias(f.identity.device());
-    offer(&f, 22, mine);
-
-    assert_eq!(f.catalog.mirror_pending_offers(), 0);
-    assert!(
-        root_of(&f, mine).is_none(),
-        "no second workspace for our alias"
-    );
-    assert!(f.identity.workspace_offers().list().is_empty(), "consumed");
-}
-
-fn register(f: &Fixture, peer: DeviceId, own: bool) {
+pub(crate) fn register(f: &Fixture, peer: DeviceId, own: bool) {
     let new = txtodo_store::NewDevice {
         device: peer,
         name: String::new(),
@@ -268,68 +145,6 @@ fn register(f: &Fixture, peer: DeviceId, own: bool) {
         .unwrap()
         .register_device_as(&new, own)
         .unwrap();
-}
-
-/// A peer re-offers the mirrors it holds, so an own device's alias can reach this device from a
-/// third one that is not own to it (lab chaos 20261001-233439: a1 mirrored its own shared list
-/// twice, once per relayed alias). Still the list the default merges: skipped.
-#[tokio::test]
-async fn an_own_devices_alias_relayed_by_another_device_is_not_mirrored() {
-    let f = fixture();
-    let (own, foreign) = (
-        DeviceId::new(Ulid::from_u128(21)),
-        DeviceId::new(Ulid::from_u128(22)),
-    );
-    register(&f, own, true);
-    register(&f, foreign, false);
-    let relayed = crate::default_workspace::default_alias(own);
-    offer(&f, 22, relayed);
-
-    assert_eq!(f.catalog.mirror_pending_offers(), 0);
-    assert!(
-        root_of(&f, relayed).is_none(),
-        "own default: merged, not mirrored"
-    );
-    assert!(f.identity.workspace_offers().list().is_empty(), "consumed");
-}
-
-/// ADR 0029's amendment, b1's side: a2 never paired here but a1 (own) vouched for it. a2's alias,
-/// mirrored before the vouch came, is dropped on the next pass and never mirrored again; the own
-/// set's change ends live sessions so they greet again under it.
-#[tokio::test]
-async fn a_vouched_devices_alias_is_not_mirrored_and_an_earlier_mirror_of_it_is_dropped() {
-    let f = fixture();
-    let (a1, a2) = (
-        DeviceId::new(Ulid::from_u128(21)),
-        DeviceId::new(Ulid::from_u128(23)),
-    );
-    register(&f, a1, true);
-    let alias = crate::default_workspace::default_alias(a2);
-    offer(&f, 23, alias);
-    assert_eq!(
-        f.catalog.mirror_pending_offers(),
-        1,
-        "not own yet: mirrored"
-    );
-    let generation = f.identity.live_peers().own_generation();
-
-    crate::own_vouch::record_own_devices(&f.identity, a1, &[a2, f.identity.device()]);
-
-    assert!(
-        f.identity
-            .store()
-            .lock()
-            .unwrap()
-            .is_own_device(a2)
-            .unwrap()
-    );
-    assert!(
-        f.identity.live_peers().own_generation() > generation,
-        "sessions greet again"
-    );
-    offer(&f, 23, alias);
-    assert_eq!(f.catalog.mirror_pending_offers(), 0);
-    assert!(root_of(&f, alias).is_none(), "the earlier mirror is gone");
 }
 
 /// Only a direct own device's list counts, and it goes back only to a direct own device.

@@ -128,6 +128,18 @@ export interface Device {
 	/** Unix ms; 0 = never contacted since it was registered. */
 	last_seen_ms: number;
 	own_device: boolean;
+	/** Why a removed row was removed (task peer-prune): "manual", "pruned_quiet", "pruned_parked" or
+	 * "left_out"; empty when unknown or not removed. */
+	removed_reason: string;
+	/** ULID text of the device that removed it; empty when unknown. */
+	removed_by: string;
+	/** Unix ms; 0 = not removed. */
+	removed_at_ms: number;
+}
+
+/** Whether the group left this device out (`GroupStatusDto`, task peer-prune). */
+export interface GroupStatus {
+	dropped_from_group: boolean;
 }
 
 /** What removing a device did. `message` is the daemon's caveat (removal does not un-share

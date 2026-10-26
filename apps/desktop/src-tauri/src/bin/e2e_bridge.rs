@@ -205,7 +205,8 @@ fn parse<T: for<'de> Deserialize<'de>>(args: Value) -> Result<T, ApiError> {
 
 /// The handful of commands the six Playwright scenarios need (tasks/desktop-playwright-tests):
 /// `list_files`, `get_file`, `apply`, `history`, `list_duplicates`, `get_notes`, `edit_notes`.
-/// `watch`/`daemon_status`/pairing/tokens/activity are unused by those
+/// (`list_conflicts`, `resolve` and the test-only `debug_raise_conflict` went with the
+/// `needs_review` flags, ADR 0038.) `watch`/`daemon_status`/pairing/tokens/activity are unused by those
 /// scenarios and intentionally not wired here — `e2e/shim/event.ts` polls the commands above
 /// instead of using a real `Watch` stream (see that file's module doc for why that's still "real
 /// reconciliation"). Dispatches to one `cmd_*` function per command (kept separate, not inlined,
@@ -225,6 +226,9 @@ async fn invoke(
     State(state): State<Shared>,
     Json(req): Json<InvokeReq>,
 ) -> Result<Response, ApiError> {
+    if req.cmd == "save_note_asset" || req.cmd == "read_note_asset" {
+        return Ok(Json(note_asset(&state.workspace, &req.cmd, req.args)?).into_response());
+    }
     if req.cmd == "workspace_root" {
         let value = Value::String(state.workspace.display().to_string());
         return Ok(Json(value).into_response());
@@ -248,12 +252,15 @@ async fn invoke(
     invoke_core(state, req).await
 }
 
-const WORKSPACE_CMDS: [&str; 6] = [
+const WORKSPACE_CMDS: [&str; 9] = [
     "list_workspaces",
     "workspace_layout",
     "add_workspace",
     "remove_workspace",
     "rename_workspace",
+    "new_list",
+    "rename_list",
+    "remove_list",
     "switch_workspace",
 ];
 
@@ -275,6 +282,31 @@ async fn invoke_core(state: Shared, req: InvokeReq) -> Result<Response, ApiError
         }
     };
     Ok(Json(value).into_response())
+}
+
+/// `save_note_asset` / `read_note_asset`: files beside a notes.md, no daemon call
+/// (`desktop_lib::commands_assets`, the same functions the app's commands run).
+fn note_asset(root: &std::path::Path, cmd: &str, args: Value) -> Result<Value, ApiError> {
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Req {
+        notes_path: String,
+        #[serde(default)]
+        name: String,
+        #[serde(default)]
+        bytes: Vec<u8>,
+        #[serde(default)]
+        link: String,
+    }
+    let r: Req = parse(args)?;
+    let out = if cmd == "save_note_asset" {
+        desktop_lib::commands_assets::save_asset(root, &r.notes_path, &r.name, &r.bytes)
+            .map(Value::String)
+    } else {
+        desktop_lib::commands_assets::read_asset(root, &r.notes_path, &r.link)
+            .map(|b| serde_json::json!(b))
+    };
+    out.map_err(ApiError)
 }
 
 async fn cmd_list_files(client: &mut DaemonClient) -> Result<Value, ApiError> {

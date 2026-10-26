@@ -51,9 +51,14 @@ pub(crate) async fn forward_changes(
             Ok(c) => pb::Change {
                 path: c.path.to_string(),
                 hash: c.hash.to_vec(),
-                ops: c.ops.iter().map(to_summary).collect(),
-                // No flags since ADR 0038; the field goes with the proto.
-                review: Vec::new(),
+                ops: c
+                    .ops
+                    .iter()
+                    .map(|s| pb::OpSummary {
+                        source: c.source.clone().unwrap_or_default(),
+                        ..to_summary(s)
+                    })
+                    .collect(),
                 progress: watch_progress_of(&svc, &h).await,
                 duplicate_groups: c.duplicate_groups,
             },
@@ -62,7 +67,6 @@ pub(crate) async fn forward_changes(
                     path: h.path().to_string(),
                     hash: c.hash.to_vec(),
                     ops: Vec::new(),
-                    review: Vec::new(),
                     progress: watch_progress_of(&svc, &h).await,
                     // Missed changes: the count as it is now.
                     duplicate_groups: h

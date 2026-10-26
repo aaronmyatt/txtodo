@@ -49,6 +49,17 @@
         "txtodo-model",
         "txtodo-store"
       ],
+      "txtodo-engine": [
+        "txtodo-core",
+        "txtodo-model",
+        "txtodo-store"
+      ],
+      "txtodo-web": [
+        "txtodo-core",
+        "txtodo-model",
+        "txtodo-store",
+        "txtodo-engine"
+      ],
       "txtodo-proto": [],
       "txtodo-daemon-launch": [],
       "txtodo-workspace-paths": [],
@@ -72,6 +83,7 @@
         "txtodo-model",
         "txtodo-store",
         "txtodo-crdt",
+        "txtodo-engine",
         "txtodo-sync",
         "txtodo-proto",
         "txtodo-mcp",

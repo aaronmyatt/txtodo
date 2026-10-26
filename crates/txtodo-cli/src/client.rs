@@ -7,8 +7,7 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 use tonic::transport::Channel;
-use txtodo_proto::v1::txtodo_client::TxtodoClient;
-use txtodo_proto::v1::{self as pb};
+use txtodo_proto::v1::{self as pb, txtodo_client::TxtodoClient};
 // Unix-domain sockets are the daemon's only transport (ADR 0010), and tokio gates `UnixStream` to
 // unix targets; on Windows the connector is compiled out and `connect` refuses instead.
 #[cfg(unix)]
@@ -134,7 +133,7 @@ fn log_mode_selected(mode: &'static str, reason: &'static str) {
 
 impl Daemon {
     #[cfg(unix)]
-    fn connect(
+    pub(crate) fn connect(
         socket: PathBuf,
         selector: Option<pb::WorkspaceSelector>,
     ) -> Result<Daemon, ClientError> {
@@ -161,7 +160,8 @@ impl Daemon {
         debug_assert!(socket.exists(), "connected through an existing socket");
         Ok(Daemon {
             rt,
-            client: TxtodoClient::new(channel),
+            client: TxtodoClient::new(channel)
+                .max_decoding_message_size(txtodo_proto::MAX_MESSAGE_BYTES),
             selector,
             socket,
         })
@@ -169,7 +169,7 @@ impl Daemon {
 
     /// Windows has no unix-domain sockets, so only direct-file mode exists there.
     #[cfg(not(unix))]
-    fn connect(
+    pub(crate) fn connect(
         socket: PathBuf,
         _selector: Option<pb::WorkspaceSelector>,
     ) -> Result<Daemon, ClientError> {
@@ -182,6 +182,20 @@ impl Daemon {
     /// Current bytes of a document (workspace-relative path).
     pub fn get(&mut self, path: &str) -> Result<Vec<u8>, ClientError> {
         Ok(self.snapshot(path)?.0)
+    }
+
+    /// Bytes of `path` and the daemon's task id per line ("" for a blank; none from an old daemon).
+    pub fn task_ids(&mut self, path: &str) -> Result<(Vec<u8>, Vec<String>), ClientError> {
+        let req = pb::GetFileRequest {
+            path: path.to_owned(),
+            workspace: self.selector.clone(),
+        };
+        let rep = self
+            .rt
+            .block_on(self.client.get_file(req))
+            .map_err(ClientError::Rpc)?
+            .into_inner();
+        Ok((rep.bytes, rep.task_ids))
     }
 
     /// `get`, plus the document's hash: the base a later `Replace` names, so the daemon can refuse
@@ -282,7 +296,7 @@ impl Daemon {
         Ok(rep.into_inner())
     }
 
-    /// A document's duplicate-line groups (ADR 0032).
+    /// A document's duplicate-line groups (ADR 0032); its flags list is empty since ADR 0038.
     pub fn conflicts(&mut self, path: &str) -> Result<pb::ConflictsResponse, ClientError> {
         let req = pb::ConflictsRequest {
             path: path.to_owned(),

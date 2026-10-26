@@ -69,3 +69,13 @@ test("first keystroke into empty notes lazily creates the ref: directory", async
 	await expect.poll(() => readFileSync(notesPath, "utf8")).toBe("first note, then more");
 	await expect(page.getByText("Notes could not be loaded")).toHaveCount(0);
 });
+
+// Dark theme: the notes editor's caret takes the text colour (white on black), not CodeMirror's
+// light-theme black, which hid it. A computed-style check, no screenshot.
+test("the notes caret is the text colour on the dark theme", async ({ page }) => {
+	await page.locator(".cm-line", { hasText: "plan the roadmap" }).first().dblclick();
+	const notesEditor = page.locator("section.notes .notes-editor .cm-content");
+	await notesEditor.click();
+	await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
+	await expect.poll(() => notesEditor.evaluate((el) => getComputedStyle(el).caretColor)).toBe("rgb(255, 255, 255)");
+});

@@ -23,7 +23,7 @@ not (
     (
         binary_id(txtodo-daemon::e2e)
         & (
-            test(/^(crash|relay_multiplex|default_workspace_foreign|layout_sync|pairing_lan)::/)
+            test(/^(crash|relay_multiplex|default_workspace_foreign|layout_sync|pairing_lan|prune_repair)::/)
             | test(=relay_converge::two_real_daemons_converge_via_relay_with_lan_disabled)
         )
     ) - test(/^support::/)

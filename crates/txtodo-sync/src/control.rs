@@ -27,8 +27,10 @@ use txtodo_store::WorkspaceId;
 
 use crate::aead::{GroupKey, GroupKeys, SealFor, open as aead_open, seal as aead_seal};
 use crate::crypto_error::CryptoError;
+use crate::device_static::DEVICE_STATIC_KEY_BYTES;
 use crate::frame::{Frame, FrameError, PROTOCOL_VERSION};
 use crate::message::GroupId;
+use crate::rotation::WrappedGrant;
 
 /// The AEAD's clear header now binds `version || group || epoch || workspace` (ADR 0021, task
 /// `daemon-workspace-identity-agreement` stage 7) — a real, meaningful field for `Message::Ops`,
@@ -51,6 +53,10 @@ pub const MAX_WORKSPACE_NAME_BYTES: usize = 256;
 /// Most devices one [`ControlMessage::OwnDevices`] may name: the identity store's own read cap
 /// (`txtodo_store::MAX_DEVICES_PER_READ`), repeated here since this crate does not read the store.
 pub const MAX_OWN_DEVICES: usize = 1_024;
+
+/// Most bytes a [`ControlMessage::Grant`]'s sealed key may carry: a nonce (24), the key (32) and the
+/// tag (16) make 72; the rest is slack, not room to hide anything.
+pub const MAX_GRANT_SEALED_BYTES: usize = 128;
 
 /// One control-channel message. Append-only variants, the same postcard-tagged-enum discipline as
 /// `Message` (see that type's own doc for why: postcard tags a variant by index, so inserting or
@@ -102,6 +108,74 @@ pub enum ControlMessage {
         /// At most [`MAX_OWN_DEVICES`]; the receiver itself is left out.
         devices: Vec<DeviceId>,
     },
+    /// A rotated group key for one device (task `peer-prune`, ADR 0044): the new epoch's key sealed
+    /// to the receiver's long-term static key (`rotation::wrap_grant_for`), so only that device can
+    /// read it, whoever else sees the frame. `left_out` names the devices the rotation dropped; a
+    /// receiver drops them too. Carried inside the control channel's own group-key seal, under the
+    /// *previous* epoch, which the receiver holds. Appended: tag 4, `PROTOCOL_VERSION` 6.
+    Grant {
+        /// The device sending it — see `Offer.sender`'s doc.
+        sender: DeviceId,
+        /// The device that minted this epoch's key. Two devices that rotate at once mint two keys
+        /// for one epoch, and the lower `minter` wins.
+        minter: DeviceId,
+        /// The epoch the key belongs to.
+        epoch: u32,
+        /// `WrappedGrant::ephemeral_public`.
+        ephemeral_public: [u8; DEVICE_STATIC_KEY_BYTES],
+        /// `WrappedGrant::sealed`, at most [`MAX_GRANT_SEALED_BYTES`].
+        sealed: Vec<u8>,
+        /// The devices the rotation dropped, at most [`MAX_OWN_DEVICES`].
+        left_out: Vec<DeviceId>,
+    },
+    /// The group-key epoch the sender is on (task `peer-prune`, ADR 0044), the first thing each side
+    /// says in a control session and the acknowledgement of a `Grant`. A device holding a higher
+    /// epoch than the one named sends the grants in between. Appended: tag 5, `PROTOCOL_VERSION` 6.
+    Epoch {
+        /// The announcing device — see `Offer.sender`'s doc.
+        sender: DeviceId,
+        /// Its current epoch.
+        epoch: u32,
+    },
+}
+
+impl ControlMessage {
+    /// A `Grant` carrying `wrapped` from `sender`, for a key `minter` made.
+    #[must_use]
+    pub fn grant(
+        sender: DeviceId,
+        minter: DeviceId,
+        wrapped: WrappedGrant,
+        left_out: Vec<DeviceId>,
+    ) -> ControlMessage {
+        ControlMessage::Grant {
+            sender,
+            minter,
+            epoch: wrapped.epoch,
+            ephemeral_public: wrapped.ephemeral_public,
+            sealed: wrapped.sealed,
+            left_out,
+        }
+    }
+
+    /// The [`WrappedGrant`] inside a `Grant`, for `rotation::open_grant`; `None` for any other
+    /// variant.
+    #[must_use]
+    pub fn wrapped_grant(&self) -> Option<WrappedGrant> {
+        match self {
+            ControlMessage::Grant {
+                epoch,
+                ephemeral_public,
+                sealed,
+                ..
+            } => Some(WrappedGrant {
+                epoch: *epoch,
+                ephemeral_public: *ephemeral_public,
+                sealed: sealed.clone(),
+            }),
+            _ => None,
+        }
+    }
 }
 
 /// Why a `ControlMessage` could not be encoded or decoded. Mirrors [`crate::message::MessageError`]
@@ -124,6 +198,13 @@ pub enum ControlMessageError {
         /// The cap.
         max: usize,
     },
+    /// `Grant.sealed` exceeds [`MAX_GRANT_SEALED_BYTES`].
+    GrantTooLong {
+        /// Its length.
+        len: usize,
+        /// The cap.
+        max: usize,
+    },
     /// postcard could not decode the body as this version's `ControlMessage`.
     Codec(postcard::Error),
     /// The body decoded but bytes were left over — a struct edit or a foreign message.
@@ -139,6 +220,9 @@ impl fmt::Display for ControlMessageError {
             }
             ControlMessageError::TooManyDevices { len, max } => {
                 write!(f, "own devices: {len} exceeds the cap of {max}")
+            }
+            ControlMessageError::GrantTooLong { len, max } => {
+                write!(f, "grant: {len} sealed bytes exceeds the cap of {max}")
             }
             ControlMessageError::Codec(e) => write!(f, "postcard: {e}"),
             ControlMessageError::TrailingBytes(n) => {
@@ -201,10 +285,24 @@ impl ControlMessage {
                     max: MAX_OWN_DEVICES,
                 })
             }
+            ControlMessage::Grant { sealed, .. } if sealed.len() > MAX_GRANT_SEALED_BYTES => {
+                Err(ControlMessageError::GrantTooLong {
+                    len: sealed.len(),
+                    max: MAX_GRANT_SEALED_BYTES,
+                })
+            }
+            ControlMessage::Grant { left_out, .. } if left_out.len() > MAX_OWN_DEVICES => {
+                Err(ControlMessageError::TooManyDevices {
+                    len: left_out.len(),
+                    max: MAX_OWN_DEVICES,
+                })
+            }
             ControlMessage::Offer { .. }
             | ControlMessage::OfferAck { .. }
             | ControlMessage::Decline { .. }
-            | ControlMessage::OwnDevices { .. } => Ok(()),
+            | ControlMessage::OwnDevices { .. }
+            | ControlMessage::Grant { .. }
+            | ControlMessage::Epoch { .. } => Ok(()),
         }
     }
 }

@@ -6,11 +6,11 @@
 // deliberately doesn't implement that stream — plain request/response HTTP handlers cover the six
 // Playwright scenarios with far less surface. Instead, this module polls `get_file` for whatever
 // paths the app has shown interest in (`./core.ts`'s `watchedPaths`) and synthesizes a
-// `daemon-change` event when a hash differs. This is still "real reconciliation, not mocks" (the
-// notes' own bar): every byte it observes came from a real `txtodod` acting on a real file — only
-// the *transport* from daemon to browser is polling instead of a push stream, which is invisible
-// to the component code under test ($lib/daemon.ts's `onDaemonChange` callback looks identical
-// either way).
+// `daemon-change` event when something differs. This is still "real reconciliation, not mocks"
+// (the notes' own bar): every byte it observes came from a real `txtodod`
+// acting on a real file — only the *transport* from daemon to browser is polling instead of a
+// push stream, which is invisible to the component code under test ($lib/daemon.ts's
+// `onDaemonChange` callback looks identical either way).
 import { invoke, watchedPaths } from "./core";
 
 type UnlistenFn = () => void;
@@ -20,7 +20,6 @@ interface EventPayload<T> {
 interface FileContents {
 	hash: string;
 }
-
 const POLL_MS = 150;
 
 /** The `Change.path` the real daemon uses to announce a layout change (task
@@ -77,10 +76,11 @@ export function listen<T>(event: string, cb: (event: EventPayload<T>) => void): 
 			for (const path of watchedPaths) {
 				const hash = await currentHash(path);
 				const seenBefore = lastHash.has(path);
+				const hashChanged = seenBefore && lastHash.get(path) !== hash;
 
 				// First observation of a path is a baseline, not a change (a real `Watch` resolves
 				// once established; it doesn't fire an initial synthetic event either).
-				if (seenBefore && lastHash.get(path) !== hash) {
+				if (hashChanged) {
 					cb({ payload: { path, hash: hash ?? "", ops: [] } as T });
 				}
 				lastHash.set(path, hash);

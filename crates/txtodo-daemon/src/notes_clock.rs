@@ -37,6 +37,7 @@ impl NotesActor {
         let before = self.hlc;
         if let Err(e) = self.hlc.merge(newest, self.clock.now_ms()) {
             log_stamp_not_merged(&self.cfg.path, &e);
+            crate::stamp_floor::hold(&mut self.ahead_floor, newest);
         }
         debug_assert!(self.hlc >= before, "merge never goes back");
     }

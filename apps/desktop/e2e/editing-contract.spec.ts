@@ -4,7 +4,8 @@
 //   blur commits ......................... inline-edit.spec.ts, save.spec.ts
 //   Cmd/Ctrl+S commits, Esc discards ..... inline-edit.spec.ts
 //   double-click opens the detail ........ detail.spec.ts
-// This file adds Cmd/Ctrl+Enter and the done styling.
+// This file adds Cmd/Ctrl+Enter and the done styling. (Read-only under review went with the
+// needs_review flags, ADR 0038.)
 // Ref: https://playwright.dev/docs/api/class-keyboard#keyboard-press (ControlOrMeta)
 import { expect, test } from "@playwright/test";
 import { type DaemonHandle, spawnDaemon } from "./fixtures";

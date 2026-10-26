@@ -11,8 +11,8 @@ pub const RECENT_WRITES: usize = 8;
 /// How long a remembered write stays valid.
 pub const EXPECTED_WRITE_TTL_MS: u64 = 2_000;
 
-/// 32-byte blake3 digest of a projection.
-pub type Hash = [u8; 32];
+/// 32-byte blake3 digest of a projection (the engine's, ADR 0042).
+pub use txtodo_engine::Hash;
 
 /// The first 8 hex digits of a hash, enough to correlate log lines without logging content.
 pub fn hex8(hash: &Hash) -> String {

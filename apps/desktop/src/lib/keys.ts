@@ -23,6 +23,7 @@ export const BINDINGS: readonly Binding[] = [
 	{ id: "nav.settings", keys: ["g s"], title: "Go to Settings" },
 	{ id: "nav.help", keys: ["?"], title: "Open Help" },
 	{ id: "nav.workspace_menu", keys: ["W"], title: "Open the workspace menu" },
+	{ id: "prompt.focus", keys: ["n"], title: "Add a task in the prompt bar" },
 	// List mode (specs/client-parity.toml list.*, the TUI's keys).
 	{ id: "list.down", keys: ["j", "Down"], title: "Next line", scope: "list" },
 	{ id: "list.up", keys: ["k", "Up"], title: "Previous line", scope: "list" },
@@ -34,10 +35,12 @@ export const BINDINGS: readonly Binding[] = [
 	{ id: "list.delete", keys: ["d d"], title: "Delete the line", scope: "list" },
 	{ id: "list.move_down", keys: ["J", "Alt-Down"], title: "Move the line down", scope: "list" },
 	{ id: "list.move_up", keys: ["K", "Alt-Up"], title: "Move the line up", scope: "list" },
+	{ id: "list.move_to", keys: ["m"], title: "Move the line to another list", scope: "list" },
+	{ id: "list.copy_to", keys: ["c"], title: "Copy the line to another list", scope: "list" },
 	{ id: "list.undo", keys: ["u"], title: "Undo this session's last change", scope: "list" },
 	{ id: "sync.open", keys: ["s"], title: "Sync details", scope: "list" },
 	{ id: "offers.open", keys: ["o"], title: "Workspace offers from paired devices", scope: "list" },
-	{ id: "detail.open", keys: ["Enter"], title: "Open the line's detail", scope: "list" }
+	{ id: "detail.open", keys: ["Enter", "Mod-Enter"], title: "Open the line's detail", scope: "list" }
 ];
 
 /** Whether binding `id` is a list-mode one. */
@@ -54,10 +57,12 @@ export interface KeyLike {
 	ctrlKey: boolean;
 	metaKey: boolean;
 	altKey: boolean;
+	shiftKey?: boolean;
 }
 
 /** The manifest's name for a key press, or null for a bare modifier. A printable key is itself
- * (`?`, `G`), modified keys are `Ctrl-`/`Alt-`/`Super-` joined. */
+ * (`?`, `G`), modified keys are `Super-`/`Ctrl-`/`Alt-`/`Shift-` joined. Shift is written only for
+ * a named key (`Shift-Space`), as the TUI does: a letter's case already says it. */
 export function keyName(e: KeyLike): string | null {
 	if (["Shift", "Control", "Alt", "Meta"].includes(e.key)) return null;
 	// The manifest's names for the keys whose DOM names differ (`ArrowDown` is `Down`).
@@ -70,7 +75,8 @@ export function keyName(e: KeyLike): string | null {
 		Escape: "Esc"
 	};
 	const key = NAMES[e.key] ?? e.key;
-	const mods = `${e.metaKey ? "Super-" : ""}${e.ctrlKey ? "Ctrl-" : ""}${e.altKey ? "Alt-" : ""}`;
+	const shift = e.shiftKey && key.length > 1 ? "Shift-" : "";
+	const mods = `${e.metaKey ? "Super-" : ""}${e.ctrlKey ? "Ctrl-" : ""}${e.altKey ? "Alt-" : ""}${shift}`;
 	return mods + key;
 }
 
@@ -101,8 +107,11 @@ export class Chords {
 		return { kind: "none" };
 	}
 
+	/** `Mod-` in a binding is Cmd (`Super-`) or Ctrl, CodeMirror's convention: either one counts.
+	 * https://codemirror.net/docs/ref/#view.KeyBinding */
 	private find(keys: string): Binding | undefined {
-		return this.bindings.find((b) => b.keys.includes(keys));
+		const asMod = keys.replace(/^(Super|Ctrl)-/, "Mod-");
+		return this.bindings.find((b) => b.keys.includes(keys) || b.keys.includes(asMod));
 	}
 }
 

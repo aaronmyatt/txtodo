@@ -150,17 +150,15 @@ fn a_registry_from_before_the_refusal_keeps_loading_and_resolving() {
     assert_eq!(registry.add(&slug, &clock).ok(), Some(ids[1]));
 }
 
-/// A pairing rekey releases a root and adopts it again under the peer's id: the same folder, so
-/// an overlap from before the refusal must not fail pairing. A plain `adopt` of a new root is
-/// refused like `add`.
+/// A plain `adopt` of a new root is refused like `add`.
 #[test]
-fn adopt_refuses_a_new_overlapping_root_but_a_released_one_is_readopted() {
+fn adopt_refuses_a_new_overlapping_root() {
     let (state, _s) = workspace(&[]);
     let (_ws, root) = workspace(&["tasks/slug", "tasks/other"]);
     let slug = root.join("tasks/slug");
     let clock = FakeClock::new(1_000);
     let db = state.path().join("registry.db");
-    let ids = legacy_rows(&db, &[&root, &slug], &clock);
+    legacy_rows(&db, &[&root, &slug], &clock);
     let mut registry = WorkspaceRegistry::open(&db).unwrap_or_else(|e| panic!("{e}"));
 
     let offered = WorkspaceId::new(clock.new_ulid());
@@ -171,17 +169,6 @@ fn adopt_refuses_a_new_overlapping_root_but_a_released_one_is_readopted() {
         matches!(err, WorkspaceRegistryError::Overlap { .. }),
         "{err}"
     );
-
-    assert!(
-        registry
-            .remove(ids[1], &clock)
-            .unwrap_or_else(|e| panic!("{e}"))
-    );
-    registry
-        .adopt_released(offered, &slug, &clock)
-        .unwrap_or_else(|e| panic!("the rekey of a released root: {e}"));
-    let listed = registry.list().unwrap_or_else(|e| panic!("{e}"));
-    assert!(listed.iter().any(|e| e.id == offered && e.root == slug));
 }
 
 fn open_args() -> crate::workspace_catalog::OpenArgs {

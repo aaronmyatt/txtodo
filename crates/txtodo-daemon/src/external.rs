@@ -3,14 +3,13 @@
 
 use crate::actor::{ActorConfig, Commit, CommitTail, FileActor, SNAPSHOT_EVERY_OPS, hash_of};
 use crate::handle::{ActorError, Applied, Change};
-use crate::reconcile::{Reconciled, reconcile};
-use crate::reconcile_sidecar::{Side, reconcile_sidecar};
+use crate::reconcile::Reconciled;
 use crate::state::DocState;
 use crate::sync_ops::apply_leniently;
 use crate::write::read_or_empty;
 use std::sync::Arc;
 use txtodo_core::{File, parse_file};
-use txtodo_model::{CostWeights, FilePath, Hlc, IdentityMode, Op, Principal, TaskId};
+use txtodo_model::{FilePath, Hlc, Op, Principal, TaskId};
 use txtodo_store::{Seq, Snapshot};
 
 /// An actor error with nobody to reply to (the watcher sent the message): logged, never dropped.
@@ -255,17 +254,10 @@ impl FileActor {
         new: &File,
         mint: &mut dyn FnMut() -> TaskId,
     ) -> Reconciled {
-        if self.cfg.identity_mode == IdentityMode::Tagged {
-            return reconcile(old, new, &self.cfg.path, mint);
-        }
-        let old_ids: Vec<Option<TaskId>> = (0..self.state.len())
-            .map(|i| self.state.entry_at(i).and_then(|e| e.id()))
-            .collect();
-        let side = Side {
-            file: old,
-            ids: &old_ids,
-        };
-        reconcile_sidecar(side, new, &self.cfg.path, &CostWeights::DEFAULT, mint)
+        // The engine reads the mode and path off the state (ADR 0042); they are the actor's own.
+        debug_assert_eq!(self.state.mode(), self.cfg.identity_mode);
+        debug_assert_eq!(self.state.path(), &self.cfg.path);
+        txtodo_engine::reconcile_replay::reconcile_against(&self.state, old, new, mint)
     }
 
     pub(crate) fn maybe_snapshot(

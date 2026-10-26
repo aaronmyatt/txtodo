@@ -30,6 +30,8 @@ impl Default for Prefs {
 /// A registered workspace, as Settings › Workspaces lists it.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct WsRow {
+    /// Which carrier syncs it.
+    pub kind: crate::state_shell::WsKind,
     /// Its id.
     pub id: String,
     /// Its name (folder, or `default workspace`).
@@ -60,6 +62,9 @@ pub struct DeviceRow {
     pub is_self: bool,
     /// When it was last reached, ms since the epoch; 0 for never.
     pub last_seen_ms: u64,
+    /// Why the group dropped this device, when it did (task `peer-prune`): the daemon pruned it or
+    /// another device did. Empty for a live device. A device removed by hand is not listed at all.
+    pub dropped: String,
 }
 
 /// An agent token (never its secret).
@@ -138,6 +143,8 @@ pub struct SettingsView {
     pub workspaces: Vec<WsRow>,
     /// Paired devices.
     pub devices: Vec<DeviceRow>,
+    /// The group left this device out (`Health.dropped_from_group`): it has to pair again.
+    pub dropped_from_group: bool,
     /// Agent tokens.
     pub tokens: Vec<TokenRow>,
     /// A new token's secret, shown once until copied or left.
@@ -146,4 +153,25 @@ pub struct SettingsView {
     pub activity: Vec<ActivityRow>,
     /// Pairing.
     pub pairing: Pairing,
+    /// The last update check (`app_upgrade.rs`).
+    pub update: UpdateCheck,
+}
+
+/// What the "Updates" row knows (task self-upgrade).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum UpdateCheck {
+    /// Not asked yet: nothing goes to the network until Enter.
+    #[default]
+    NotChecked,
+    /// This build is the newest release (its tag).
+    Current(String),
+    /// A newer release, and the command `txtodo upgrade` will run for it.
+    Available {
+        /// The release tag.
+        latest: String,
+        /// What the upgrade runs.
+        command: String,
+    },
+    /// The check failed: why, in one line.
+    Failed(String),
 }

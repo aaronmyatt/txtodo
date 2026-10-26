@@ -114,7 +114,8 @@ fn protocol_banner(state: &AppState) -> Option<Banner> {
     Some(b)
 }
 
-/// The duplicate-lines banner (ADR 0032); it opens the review sheet.
+/// The duplicate-lines banner (ADR 0032); it opens the review sheet. (The `needs_review` flags
+/// banner went with the Loro mirror, ADR 0038.)
 fn review_banners(state: &AppState, out: &mut Vec<Banner>) {
     let groups = state.duplicates.len();
     if groups > 0 {

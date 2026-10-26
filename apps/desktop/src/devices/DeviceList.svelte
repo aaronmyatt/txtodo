@@ -4,11 +4,13 @@
 	// caveat (it does not un-share what the device already has) is shown after.
 	import { onMount } from "svelte";
 	import { showToast } from "$lib/stores/toast";
-	import { deviceList, deviceRemove } from "./api";
+	import { deviceList, deviceRemove, groupStatus } from "./api";
+	import { droppedNote } from "./removal";
 	import { relativeTime } from "./time";
 	import type { Device } from "./types";
 
 	let devices = $state<Device[]>([]);
+	let dropped = $state(false);
 	let error = $state("");
 	let confirming = $state<string | null>(null);
 	let busy = $state(false);
@@ -18,6 +20,7 @@
 	async function refresh() {
 		try {
 			devices = await deviceList();
+			dropped = (await groupStatus()).dropped_from_group;
 		} catch (e) {
 			error = String(e);
 		}
@@ -42,6 +45,11 @@
 </script>
 
 <h3>Paired devices</h3>
+{#if dropped}
+	<p class="dropped" role="alert">
+		Dropped from the group: your other devices no longer share their key with this one. Pair again from one of them to sync here.
+	</p>
+{/if}
 <ul>
 	{#each ordered as d (d.id)}
 		<li class:removed={d.removed}>
@@ -55,6 +63,7 @@
 				<span class="seen">
 					{#if d.is_self}now{:else if d.last_seen_ms > 0}seen {relativeTime(d.last_seen_ms)}{:else}not seen yet{/if}
 				</span>
+				{#if droppedNote(d)}<span class="seen">{droppedNote(d)}</span>{/if}
 			</div>
 			{#if confirming === d.id}
 				<span class="confirm" role="alert">
@@ -170,6 +179,14 @@
 
 	.error {
 		color: var(--color-error, crimson);
+		font-size: 0.8125rem;
+	}
+
+	.dropped {
+		margin: 0 0 0.75rem;
+		padding: 0.5rem 0.75rem;
+		border: 2px solid var(--color-error, #dc2626);
+		border-radius: 0.5rem;
 		font-size: 0.8125rem;
 	}
 </style>

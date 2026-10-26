@@ -95,6 +95,42 @@ export interface ApplyResult {
 	hlc_counter: number;
 }
 
+/** What `txtodo upgrade --check --json` said (task self-upgrade). Mirrors
+ * `desktop_lib::commands_upgrade::UpdateCheckDto`. */
+export interface UpdateCheck {
+	current: string;
+	latest: string;
+	newer: boolean;
+	/** What the upgrade runs. */
+	command: string;
+}
+
+/** Writes a dropped image beside `notesPath` (a workspace-relative notes.md); returns the link
+ * target, `assets/<hash>-<name>` (`commands_assets.rs`). Local to this device: no sync carries it. */
+export function saveNoteAsset(notesPath: string, name: string, bytes: number[]): Promise<string> {
+	return invoke("save_note_asset", { notesPath, name, bytes });
+}
+
+/** The bytes of an `assets/…` image a notes.md links. */
+export function readNoteAsset(notesPath: string, link: string): Promise<number[]> {
+	return invoke("read_note_asset", { notesPath, link });
+}
+
+/** Asks the installed `txtodo` CLI for the newest release; only when the human presses Check. */
+export function checkUpdates(): Promise<UpdateCheck> {
+	return invoke("check_updates");
+}
+
+/** Runs `txtodo upgrade` (the release for this install, then the daemon restart); its last line. */
+export function runUpgrade(): Promise<string> {
+	return invoke("run_upgrade");
+}
+
+/** Starts the app again on the upgraded build. */
+export function relaunch(): Promise<void> {
+	return invoke("relaunch");
+}
+
 /** This app's build and, when it answers, the daemon's (`commands_version.rs::build_info`). */
 export function buildInfo(): Promise<BuildInfo> {
 	return invoke("build_info");
@@ -291,6 +327,9 @@ export interface WorkspaceInfo {
 	is_remote?: boolean;
 	/** The name every paired device shows for it (task workspace-vanity-name); empty from an older daemon. */
 	name?: string;
+	/** Which carrier syncs it (task two-kinds-of-workspace): a "list" txtodo syncs between your own
+	 * devices (the default is one), a "repo" git syncs. Empty from an older daemon. */
+	kind?: "list" | "repo" | "";
 }
 
 /** The current workspace's layout (task workspace-layout). Mirrors `WorkspaceLayoutDto`. */
@@ -330,6 +369,26 @@ export function removeWorkspace(id: string, root: string): Promise<boolean> {
  * daemon trims it and refuses one over 256 bytes or with control characters. */
 export function renameWorkspace(id: string, name: string): Promise<WorkspaceInfo> {
 	return invoke("rename_workspace", { id, name });
+}
+
+/** Makes the list `name` (task two-kinds-of-workspace) when this device has none; a list that is
+ * already here comes back as it is. 1 to 48 of a-z, 0-9, `-` and `_`; the daemon folds the case.
+ * Does not switch to it. */
+export function newList(name: string): Promise<WorkspaceInfo> {
+	return invoke("new_list", { name });
+}
+
+/** Changes the name a list shows; `list` is the name it shows or was made under (its folder's).
+ * Its id and folder stay. The daemon checks the new name as a list name and finds it free. */
+export function renameList(list: string, name: string): Promise<WorkspaceInfo> {
+	return invoke("rename_list", { list, name });
+}
+
+/** Takes a list off this device: its folder moves aside, never deleted, and the other devices keep
+ * the list. Refused for the current workspace, like `removeWorkspace`. Resolves to where the
+ * folder went. */
+export function removeList(list: string, root: string): Promise<string> {
+	return invoke("remove_list", { list, root });
 }
 
 /** Points every future daemon call at `root` instead — no reconnect. Callers must also re-fetch

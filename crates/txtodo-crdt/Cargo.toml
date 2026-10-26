@@ -5,23 +5,13 @@ edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 publish.workspace = true
-description = "Loro document, ops to/from Loro, reconciler."
+description = "The Loro merge engine for notes.md."
 
 [dependencies]
 txtodo-model.workspace = true
-txtodo-store.workspace = true
 txtodo-core.workspace = true
-# https://docs.rs/loro — CRDT engine: movable list, text, maps (ADR 0002; LWW stamping ADR 0013)
+# https://docs.rs/loro — CRDT engine: text (ADR 0002)
 loro = "1.16.0"
-# https://docs.rs/tracing — event/span emission only; txtodo-daemon wires the subscriber.
-tracing = "0.1"
-
-[dev-dependencies]
-# https://docs.rs/tracing-subscriber — test-only local JSON capture for `src/no_secrets_tests.rs`
-# (root todo.txt `logging-flow-test`); this crate may not depend on `txtodo-telemetry`
-# (`.claude/budgets.json`'s `allowedDeps` — see tasks/logging-flow-test/notes.md), so the same
-# LogSink/capturing_dispatch shape is reimplemented locally against the shared workspace pin.
-tracing-subscriber = { workspace = true }
 
 [lints]
 workspace = true

@@ -117,6 +117,62 @@ pub async fn rename_workspace(
     Ok(WorkspaceInfoDto::from(info))
 }
 
+/// Makes the named list when this device has none (task two-kinds-of-workspace, ADR 0043); a
+/// list that is already here comes back as it is. Does not switch to it.
+#[tracing::instrument(name = "ipc.new_list", skip_all)]
+#[tauri::command]
+pub async fn new_list(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<WorkspaceInfoDto, String> {
+    ensure_connected(&app, &state).await?;
+    let mut client = state.client_snapshot().await?;
+    let made = client.list_ensure(&name).await.map_err(|e| e.to_string())?;
+    let info = made.workspace.ok_or("the daemon made no list")?;
+    Ok(WorkspaceInfoDto::from(info))
+}
+
+/// Changes the name a list shows (`ListRename`: checked as a list name and found free); `list` is
+/// the name it shows or was made under. Its id and folder stay.
+#[tracing::instrument(name = "ipc.rename_list", skip_all)]
+#[tauri::command]
+pub async fn rename_list(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    list: String,
+    name: String,
+) -> Result<WorkspaceInfoDto, String> {
+    ensure_connected(&app, &state).await?;
+    let mut client = state.client_snapshot().await?;
+    let info = client
+        .list_rename(&list, &name)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(WorkspaceInfoDto::from(info))
+}
+
+/// Takes a list off this device (`ListRemove`): its folder moves aside, never deleted, and the
+/// other devices keep the list. Refuses the current workspace, like `remove_workspace`. Answers
+/// where the folder went.
+#[tracing::instrument(name = "ipc.remove_list", skip_all)]
+#[tauri::command]
+pub async fn remove_list(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    list: String,
+    root: String,
+) -> Result<String, String> {
+    let current = state.current_workspace.lock().await.clone();
+    if current.as_deref() == Some(std::path::Path::new(&root)) {
+        return Err("cannot remove the current workspace; switch away first".to_owned());
+    }
+    ensure_connected(&app, &state).await?;
+    let mut client = state.client_snapshot().await?;
+    let gone = client.list_remove(&list).await.map_err(|e| e.to_string())?;
+    Ok(gone.moved_to)
+}
+
 /// Points every future command at `root` instead — no reconnect, since the global daemon already
 /// serves every registered workspace over the one connection `ensure_connected` maintains.
 #[tracing::instrument(name = "ipc.switch_workspace", skip_all)]

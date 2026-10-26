@@ -8,20 +8,29 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
 - Commands and aliases exactly as todo.sh 2.14: `add`/`a`, `addm`, `list`/`ls`, `listall`/`lsa`,
   `listpri`/`lsp`, `listproj`/`lsprj`, `listcon`/`lsc`, `listfile`/`lf`, `do`, `pri`/`p`,
   `depri`/`dp`, `append`/`app`, `prepend`/`prep`, `replace`, `del`/`rm`, `move`/`mv`, `archive`,
-  `deduplicate`, `report`; plus `fmt`, `lint`, `env`.
+  `deduplicate`, `report`; plus `fmt`, `lint`, `env`, and `copy`/`cp` (a new task at the end of
+  another list, without `id:`/`ref:`). `list` shows open tasks only unless a term names `is:done`
+  or `is:open`; `listall` shows every line. In daemon mode `move` and `copy` skip the scratch
+  adapter (it holds one list): `move` is the daemon's cross-file `Move`, which takes the `ref:`
+  folder along, and `copy` an `Add` at DEST (`commands/move_copy.rs`).
 - Daemon-only: `log [--file F] [-n N]`, `blame ITEM#`, `undo [--steps N]`,
   `checkout YYYY-MM-DDTHH:MM[:SS] [--stdout] [--file F]` (fail with the fix in direct mode);
   `doctor [--verbose]` (seven fixed checks — including `keystore` and `transport`, the latter
   plan M4 `sync-lan-transport`: relay off, endpoint bound, discovery active, paired — plus one row
   per known sync peer, and from `SyncStatus` one `sync` row per file a peer's ops keep being
   refused on and per parked peer, `doctor_sync.rs`, sync-drift line 7; a FAIL per peer on another
-  sync protocol and per file split with a peer, same ops and different bytes, ADR 0035; exit 1 on
-  any FAIL); `daemon install|start|stop|status [--force]`; `device
-  list|remove <id> [--yes]` (plan M4 tasks/sync-device-remove — removal confirms by making the
+  sync protocol and per file split with a peer, same ops and different bytes, ADR 0035; a `group` FAIL when
+  `Health.dropped_from_group` says the group left this device out, and an ok `peer` row per device the group
+  dropped, `doctor_prune.rs`, task `peer-prune`; exit 1 on any FAIL); `daemon install|start|stop|status [--force]`; `device
+  list|remove <id> [--yes]` (plan M4 tasks/sync-device-remove; `list` also shows why and when a row was removed,
+  `removal.rs` —  removal confirms by making the
   human type the id back unless `--yes`); `workspace rejoin <id> [--yes]` (sync-drift line 8,
   `commands/workspace_rejoin.rs`: a dry run first so a refusal comes before the prompt, then a
   `[y/N]` prompt on stderr that EOF answers no; the daemon moves this device's copy into a backup
-  folder beside the root and refills it from a paired peer); `workspace rename <id> <name>` (task
+  folder beside the root and refills it from a paired peer); `workspace bind <id> [DIR] [--yes]
+  [--dry-run]` (task spike-txtodo-should-merge-remote-workspa, `commands/workspace_bind.rs`: the
+  same dry-run-then-prompt shape; `WorkspaceBind` moves a Remote mirror into DIR, default this
+  workspace's folder, or the cwd when that resolved to the default); `workspace rename <id> <name>` (task
   workspace-vanity-name: `WorkspaceRename`, the daemon writes `name` into the workspace's
   `txtodo.toml`, which syncs; `workspace list` shows `WorkspaceInfo.name` after the id, and its
   JSON carries `name`); `pair [CODE]` (plan M4, design §4): no `CODE` starts a
@@ -53,10 +62,61 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   duplicates`); `conflicts delete <line>` deletes one copy and `conflicts keep-newest` every copy
   but the newest id in each group, through `Apply` `Delete` by task id, after a `[y/N]` confirm on
   stderr (`--yes` skips it; a closed stdin is a no) (`commands/conflicts_dup.rs`).
+- `upgrade [--check]` (task self-upgrade, `commands/upgrade.rs`): the newest release tag from where
+  GitHub's `releases/latest` redirects (`curl`, only when asked), compared with this build; the
+  install kind read off the binary's path (Homebrew cellar → `brew upgrade`, `$CARGO_HOME/bin` →
+  a source build it will not touch, else the macOS install script for that tag into the same
+  folder); then `daemon install --force` so the new `txtodod` serves. Handled before any
+  workspace or config is resolved. `--check` prints and changes nothing.
+- `notices on|off|status` (ADR 0041, `commands/notices.rs`): `off` leaves `notices-off` beside the
+  daemon's socket, `on` removes it; the daemon checks it whenever a notice is due.
 - Line numbers are the ids: 1-based over every line, blanks included.
-- Global flags: `--dir DIR`, `--sync-dir DIR`, `--json`, `--no-id`, `-A/--no-archive`, `--no-daemon`.
+- Global flags: `--dir DIR`, `--list NAME`, `--sync-dir DIR`, `--json`, `--no-id`,
+  `-A/--no-archive`, `--no-daemon`. `--list NAME` (task two-kinds-of-workspace, `commands/lists.rs`)
+  is `--dir <that list's folder>`: it asks the global daemon (started if down) for the list the name
+  means, by the rule every client shares (`txtodo_workspace_paths::pick_list`: what a list shows,
+  else the name it was made under), and conflicts with `--dir` and `--no-daemon`. The hidden flag
+  that scopes a run to a sub-list file is `--sublist` (it was `--list` until named lists took the
+  name).
+- `merge-driver BASE OURS THEIRS` (task two-kinds-of-workspace, `commands/merge_driver.rs`): git's merge
+  driver for a repo's todo lists (`%O %A %B`). Merges three ways with `txtodo_core::merge3` and writes
+  the result over OURS; exit 0 merged, 1 left it to git (a file that is not UTF-8). Handled before any
+  path, config or daemon, like `upgrade`. `tests/it/merge_driver_git.rs` runs a real `git merge` through it.
+- `git setup [--dry-run]` (task two-kinds-of-workspace, `commands/git_setup.rs`; the daemon now does the
+  same for every repo it finds or registers, writing `.git/info/attributes` and a bare `txtodo` driver, and both
+  count as set up here and in `doctor`, so this is for a team that wants `.gitattributes` committed): makes the clone at or
+  above `--dir`/cwd merge todo lists line by line. Each only if missing, so a second run changes
+  nothing: `.gitattributes` (`todo.txt merge=txtodo`, the `txtodo.toml` root list too, `done.txt
+  merge=union`; commit it), `merge.txtodo.driver` in this clone's config (`txtodo` as found on `PATH`
+  when that is this binary, else the running binary, since a Homebrew symlink resolves into a Cellar
+  folder an upgrade removes), and `.txtodo/` in `.git/info/exclude` (through `git rev-parse --git-path`,
+  so a linked worktree works). `plan` is pure; `txtodo doctor` reuses it (`doctor_git.rs`: one `git` WARN per repo workspace that is
+  a clone with no driver set up, naming `txtodo git setup --dir <root>`; none for a set-up clone, a list, a
+  mirror or a plain folder). `commands/early.rs`
+  answers `upgrade`, `merge-driver` and `git` before any path, config or daemon.
+- `repos [ls]`, `repos scan [--background]`, `repos add DIR`, `repos roots [add|rm DIR]` (task
+  two-kinds-of-workspace, `commands/repos.rs`): the git clones with a todo list the daemon knows, and
+  the folders it scans for more (`Repos` RPC; `add` is `WorkspaceAdd` after checking for a `.git`).
+  Device-level like `workspace`. `Command::is_registry` names the three device-level families
+  (`workspace`, `lists`, `repos`) so `main` neither adopts a layout nor announces the default for them.
+  `txtodo doctor` gets one `repos` OK row (count, roots, last scan) beside the `git` WARN rows.
+  On macOS `repos`, `repos roots` and that row also say which of `~/Desktop`, `~/Documents`, `~/Downloads`,
+  `~/Movies`, `~/Music`, `~/Pictures` the scan leaves alone (macOS asks permission to read them) and how to scan
+  one: `repos roots add ~/Documents` (`repos.rs::skipped_note`).
+- `workspace prune --repo-mirrors [--yes]` (task two-kinds-of-workspace, `commands/workspace_mirrors.rs`):
+  `MirrorsRetire` for every Remote mirror an older build made (`remote/<id>/`): a dry run listing each and
+  where it would go, and with `--yes` moves its text and store into a `.rejoin-backup-` sibling and
+  un-registers it; nothing is deleted. `txtodo doctor` gets one `mirror` row per mirror
+  (`doctor_mirrors.rs`, replacing the `bind` rows): OK when the same-named clone has every line of the
+  mirror's root `todo.txt`, WARN with the count and the first line it lacks otherwise. `workspace bind`
+  still works this release and says on stderr that it is going.
+- `lists [ls]`, `lists new NAME`, `lists rename LIST NEW`, `lists rm LIST`, `lists import DIR [NAME]`
+  (task two-kinds-of-workspace, ADR 0043, `commands/lists.rs`, `lists_import.rs`): the named lists
+  txtodo syncs between your own devices. Device-level like `workspace`: none names a folder, so none
+  registers the cwd. `rm` moves the folder aside (never deletes; other devices keep the list);
+  `import` copies a folder's files (not hidden ones, not its `.txtodo/`) into a new list.
 - Config `config.toml` (`todo_dir`, `id_tags`, `identity_mode`, `key_store`, `sync_dir`,
-  `url_schemes`) at `$TXTODO_CONFIG`, else `$XDG_CONFIG_HOME|%APPDATA%|~/.config` +
+  `url_schemes`; `prune_parked_after` and `prune_quiet_after` are the daemon's, ADR 0044, and only parse here) at `$TXTODO_CONFIG`, else `$XDG_CONFIG_HOME|%APPDATA%|~/.config` +
   `txtodo/config.toml`; env `TXTODO_TODO_DIR`. Precedence: `--dir` > env > config > cwd.
   `identity_mode = "tagged"|"sidecar"` (docs/questions.md Q2) is the name to reach for going
   forward; `id_tags` still works alone for an existing config, but an unset config is `Sidecar`
@@ -82,7 +142,7 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   adapter, `plan_mutations`), `archive_plan` (`archive`'s reorder as `MoveToEnd`s), `base_guard` (`RequireBase` for
   line-number-only batches), `plan_check` (replays a plan the way the daemon applies it), `bundle`
   (`export`/`import`, plan M8 `cli-bundle`), `commands::{add, list, edit, archive, text, fileops, hygiene,
-  history, doctor, service, conflicts, env, pair, device, refdir, mcp}`; `main` = `dispatch`
+  history, doctor, service, conflicts, env, pair, device, refdir, mcp, upgrade}`; `main` = `dispatch`
   (direct) and `dispatch_daemon`; `cli` (the `Cli`/`Command` clap grammar) and `commands::env` are
   split out of `main.rs` purely for its own file-length budget.
 
@@ -107,10 +167,16 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   command's own output was already printed by then; the error says nothing was written.
 - Mode selection: socket missing or `--no-daemon` → direct; socket present → connect; present but
   refused → error with the fix (`txtodo doctor`, `--no-daemon`). Never a silent fallback.
-- A read never registers a folder (`register_guard.rs`, tasks/cli-no-implicit-register): in a
-  folder no registered workspace covers, a read-only command fails with the fix (`workspace add`,
-  `--no-daemon`), `env` answers directly and `doctor` asks the daemon without naming the folder.
-  Writes still register a fresh folder (task cli-workspace-autoregister).
+- A read-only command (list*, lint, env, log, blame, checkout, open, `conflicts`, `prune` without
+  `--yes`, `sub … <one of those>`) never registers a folder: against the global daemon, in a
+  folder no registered workspace holds, it fails naming `txtodo workspace add` and `--no-daemon`
+  (`register_guard.rs`, task cli-no-implicit-register). A command that writes still registers, and so does a
+  read in a git checkout's root that holds a list (`is_repo_root`, task two-kinds-of-workspace: a repo is never
+  offered to a peer, and sidecar identity stamps nothing).
+- `sub ITEM CMD…`: ITEM is a root line number, or a `ref:` slug path (`trip`, `trip/flights`)
+  resolved list by list through `RefDir` (`commands/sub_slug.rs`, task cli-sub-by-slug). A
+  `--dir` strictly inside a registered workspace re-runs as `--dir <root> --sublist <dir>/todo.txt`
+  (`register_guard::rerun_scoped`) instead of the daemon refusing it.
 - todo.sh parity is a test: `tests/it/todosh_parity.rs` (direct mode). `tests/e2e/daemon_mode.rs` spawns a
   real txtodod (built on demand with cargo — this crate may not depend on the daemon crate).
 - `add` always stamps today's local date; it stamps `id:<ULID>` too only when `Config::id_tags()`

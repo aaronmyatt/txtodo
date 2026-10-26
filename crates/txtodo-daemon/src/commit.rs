@@ -41,7 +41,9 @@ impl FileActor {
         hash: Hash,
         range: Option<SeqRange>,
         ops: Vec<Op>,
+        tail: CommitTail,
     ) -> Change {
+        let CommitTail { source, .. } = tail;
         let first = range.map_or(0, |r| r.first.0);
         let stored: Vec<Stored> = ops
             .into_iter()
@@ -64,6 +66,8 @@ impl FileActor {
             hash,
             ops: stored,
             duplicate_groups: u32::try_from(groups).unwrap_or(u32::MAX),
+            // As the op log keeps it, so Watch and History name a client the same way.
+            source: source.map(|s| txtodo_store::cap_source(&s).to_owned()),
         }
     }
 }

@@ -1,7 +1,8 @@
 # 0029 — Every user has one default workspace
 
 - Status: accepted; amended 2026-09-24 (own devices only, see Amendment); second amendment
-  2026-10-02 (own carries across) accepted 2026-10-02
+  2026-10-02 (own carries across) accepted 2026-10-02; amended 2026-10-25 by ADR 0043 (the default
+  is one list of many, and a foreign peer gets no list, so the alias path retires)
 - Date: 2026-09-21
 - Deciders: project owner (the three decisions below, 2026-09-20)
 

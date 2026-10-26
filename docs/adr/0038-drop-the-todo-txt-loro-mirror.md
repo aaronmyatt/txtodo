@@ -1,10 +1,13 @@
 # 0038 — Drop the Loro mirror of todo.txt documents
 
 - Status: accepted 2026-10-02 (the owner chose conflict review A in `tasks/drop-task-mirror/notes.md`)
-- Built 2026-10-02 in the daemon (the mirror, its upkeep, the import/export path); 2026-10-13 the
-  store's mirror write, conflict review A in every client, the daemon, crdt and store, and the
-  `txtodo-crdt` list code (the conflict table now runs on `DocState`). Still to go: the proto's
-  `ResolveConflict`/`ReviewFlag` (`tasks/drop-task-mirror`)
+- Built 2026-10-02 in the daemon (the mirror, its upkeep, the import/export path); 2026-10-11 the
+  `txtodo-crdt` list code, the store's todo.txt mirror row and conflict review A in every client.
+  Then, decided by the agent on the owner's standing instruction: `ReviewFlag`, `Resolution`,
+  `ResolveRequest` and the `ResolveConflict` RPC left the proto, the `Change.review` and
+  `ConflictsResponse.flags` field numbers `reserved`. No protocol bump: removed fields decode as
+  empty in an older client, and an older client's `ResolveConflict` gets UNIMPLEMENTED
+  (`tasks/drop-task-mirror/drop-review-flags/notes.md`)
 - Date: 2026-10-02
 - Deciders: project owner
 

@@ -1,8 +1,8 @@
 //! `txtodo workspace add|remove|list` (ADR 0025, task `cli-workspace-commands`): manages the
 //! device-global daemon's workspace registry; `rename` (task workspace-vanity-name) sets the name
-//! every paired device shows. `offers|accept|decline` (task
-//! `workspace-offer-cli`) live in `workspace_offers.rs`, `rejoin` (task sync-drift line 8) in
-//! `workspace_rejoin.rs`; only their clap variants are here. Needs the true global daemon — a legacy
+//! every paired device shows. `offers|accept|decline` (task `workspace-offer-cli`) live in
+//! `workspace_offers.rs`, `rejoin` (task sync-drift line 8) in `workspace_rejoin.rs`, `bind` in
+//! `workspace_bind.rs`; only their clap variants are here. Needs the true global daemon — a legacy
 //! `--dir`-bridge daemon has no registry to answer these with (`Daemon::workspace_add`/etc.
 //! return an `Unimplemented` `ClientError::Rpc` against one, surfaced as a normal error).
 
@@ -84,6 +84,13 @@ pub enum Action {
         #[arg(long)]
         yes: bool,
     },
+    /// Retiring: moves a Remote workspace (one an older build mirrored from a paired device) into
+    /// a folder, for a repo cloned on two devices. Nothing is mirrored now: a repo's list travels
+    /// with git (`txtodo git setup`), and `workspace prune --repo-mirrors` moves the old mirrors
+    /// aside. Still works this release: this folder's own copy moves into a new folder beside it,
+    /// never deleted or sent, and the synced copy moves in. Shows what moves and asks first, unless
+    /// `--yes`.
+    Bind(super::workspace_bind::Args),
     /// Prints the default workspace's directory (the folder Finder will not show), and whether it
     /// exists yet. Needs no daemon.
     Default,
@@ -94,6 +101,11 @@ pub enum Action {
         /// Actually remove the dead registrations; omitted is a dry run (list only).
         #[arg(long)]
         yes: bool,
+        /// Instead: move every Remote mirror an older build made aside (never deleted) and
+        /// un-register it. A repo's list travels with git now (`txtodo git setup`); `txtodo
+        /// doctor` shows which mirrors hold a line your clone lacks. Dry run unless `--yes`.
+        #[arg(long)]
+        repo_mirrors: bool,
     },
 }
 
@@ -109,7 +121,10 @@ pub fn run(
         Some(Action::Add { dir }) => run_add(ctx, daemon, dir.as_deref(), as_json),
         Some(Action::Remove { id }) => run_remove(daemon, id, as_json),
         Some(Action::Rename { id, name }) => run_rename(daemon, id, name, as_json),
-        Some(Action::Prune { yes }) => run_prune(daemon, *yes, as_json),
+        Some(Action::Prune { yes, repo_mirrors }) if *repo_mirrors => {
+            super::workspace_mirrors::run(daemon, *yes, as_json)
+        }
+        Some(Action::Prune { yes, .. }) => run_prune(daemon, *yes, as_json),
         Some(Action::Offers) => super::workspace_offers::run_offers(daemon, as_json),
         Some(Action::Accept { id, from }) => {
             super::workspace_offers::run_accept(daemon, id, from.as_deref(), as_json)
@@ -118,6 +133,7 @@ pub fn run(
             super::workspace_offers::run_decline(daemon, id, from.as_deref(), as_json)
         }
         Some(Action::Rejoin { id, yes }) => super::workspace_rejoin::run(daemon, id, *yes, as_json),
+        Some(Action::Bind(args)) => super::workspace_bind::run(ctx, daemon, args, as_json),
         Some(Action::Default) => run_default(&Env::from_process().map_err(CliError::Io)?, as_json),
         Some(Action::Layout {
             refs_dir,

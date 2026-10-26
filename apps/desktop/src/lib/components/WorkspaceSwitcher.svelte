@@ -17,7 +17,10 @@
 	import {
 		addWorkspace,
 		listWorkspaces,
+		newList,
+		removeList,
 		removeWorkspace,
+		renameList,
 		renameWorkspace,
 		switchWorkspace,
 		universalTasks,
@@ -26,10 +29,13 @@
 	} from "$lib/daemon";
 	import Icon from "$lib/icons/Icon.svelte";
 	import { currentWorkspaceRoot } from "$lib/stores/workspaces";
+	import { folderOf, groupWorkspaces } from "$lib/workspaceGroups";
 
 	let open = $state(false);
 	let workspaces = $state<WorkspaceInfo[]>([]);
 	let newPath = $state("");
+	// The name of a list being made (task two-kinds-of-workspace).
+	let newListName = $state("");
 	let error = $state("");
 	let busy = $state(false);
 	// The workspace whose name is being edited, and the text so far (task workspace-vanity-name).
@@ -59,10 +65,8 @@
 			.catch(() => (openCounts = new Map()));
 	}
 
-	/** The folder a root ends in. */
-	function folderOf(root: string): string {
-		return root.split(/[\\/]/).filter(Boolean).pop() ?? root;
-	}
+	// Lists first and repos after, each under a heading (`workspaceGroups.ts`).
+	const groups = $derived(groupWorkspaces(workspaces));
 
 	/** What the trigger and a row call a workspace: its name when it has one, else its folder. */
 	function title(ws: WorkspaceInfo): string {
@@ -217,6 +221,24 @@
 		}
 	}
 
+	/** Makes the list typed in the New list field; the daemon checks the name. */
+	async function makeList(e: SubmitEvent) {
+		e.preventDefault();
+		const name = newListName.trim();
+		if (!name || busy) return;
+		error = "";
+		busy = true;
+		try {
+			await newList(name);
+			newListName = "";
+			await refresh();
+		} catch (e2) {
+			error = String(e2);
+		} finally {
+			busy = false;
+		}
+	}
+
 	async function startRename(ws: WorkspaceInfo) {
 		error = "";
 		renaming = ws.id;
@@ -246,7 +268,10 @@
 		error = "";
 		busy = true;
 		try {
-			await renameWorkspace(ws.id, name);
+			// A list is renamed through `ListRename`: the daemon checks the name as a list name and
+			// finds it free. It is addressed by its folder, the name it was made under.
+			if (ws.kind === "list") await renameList(folderOf(ws.root), name);
+			else await renameWorkspace(ws.id, name);
 			renaming = null;
 			await refresh();
 		} catch (e2) {
@@ -261,7 +286,10 @@
 		error = "";
 		busy = true;
 		try {
-			await removeWorkspace(ws.id, ws.root);
+			// A list moves its folder aside and stays on the other devices; any other workspace is
+			// only forgotten, its files untouched.
+			if (ws.kind === "list") await removeList(folderOf(ws.root), ws.root);
+			else await removeWorkspace(ws.id, ws.root);
 			await refresh();
 		} catch (e) {
 			error = String(e);
@@ -295,7 +323,9 @@
 				<p class="error" role="alert">{error}</p>
 			{/if}
 			<ul>
-				{#each workspaces as ws (ws.id)}
+				{#each groups as group (group.heading ?? "")}
+				{#if group.heading}<li class="group-head" role="presentation">{group.heading}</li>{/if}
+				{#each group.items as ws (ws.id)}
 					<li class:current={ws.root === $currentWorkspaceRoot} class:missing={!ws.root_exists}>
 						{#if renaming === ws.id}
 							<form class="rename-form" onsubmit={(e) => rename(e, ws)}>
@@ -362,7 +392,18 @@
 						{/if}
 					</li>
 				{/each}
+				{/each}
 			</ul>
+			<form class="new-list" onsubmit={makeList}>
+				<input
+					type="text"
+					aria-label="New list name"
+					placeholder="new list name"
+					bind:value={newListName}
+					disabled={busy}
+				/>
+				<button type="submit" disabled={busy}>New list</button>
+			</form>
 			<form onsubmit={add}>
 				<input
 					type="text"
@@ -497,6 +538,21 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		opacity: 0.6;
+	}
+
+	/* The Lists / Repos headings (task two-kinds-of-workspace): quiet labels, not rows. */
+	.group-head {
+		margin: 0.4rem 0 0.15rem;
+		padding: 0 0.4rem;
+		font-size: 0.65rem;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		opacity: 0.6;
+	}
+
+	.new-list {
+		margin-top: 0.5rem;
 	}
 
 	.tag {

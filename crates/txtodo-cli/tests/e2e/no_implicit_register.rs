@@ -1,73 +1,110 @@
-//! Read-only commands never register a folder (tasks/cli-no-implicit-register): the daemon opens
-//! and registers any root a request names by path, so a `listall` in an old checkout made it a
-//! workspace and the daemon stamped `id:` into every list there. In an unregistered folder the
-//! reads fail with the fix, register nothing, make no `.txtodo/` and change no bytes. A real
-//! `txtodod` in global mode.
+//! Task cli-no-implicit-register: a command that only reads, run in a folder no workspace holds,
+//! registers nothing, makes no `.txtodo/`, changes no byte, and says how to go on. (On 2026-10-11
+//! `listall` and `sub 1 listall` in an old checkout registered it and the daemon rewrote ~120 lists.)
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in their helpers.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use crate::support;
 
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use support::global_daemon::GlobalDaemon;
 
-/// Every file under `root` and its bytes.
-fn snapshot(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
-    let mut out = BTreeMap::new();
-    let mut stack = vec![root.to_path_buf()];
-    while let Some(dir) = stack.pop() {
-        for entry in std::fs::read_dir(&dir).unwrap() {
-            let path = entry.unwrap().path();
-            if path.is_dir() {
-                stack.push(path);
+/// Every file under `dir` with its bytes, sorted.
+fn snapshot(dir: &Path) -> Vec<(String, Vec<u8>)> {
+    let mut out = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        for entry in std::fs::read_dir(&d).unwrap() {
+            let p = entry.unwrap().path();
+            if p.is_dir() {
+                stack.push(p);
             } else {
-                out.insert(path.clone(), std::fs::read(&path).unwrap());
+                let rel = p.strip_prefix(dir).unwrap().display().to_string();
+                out.push((rel, std::fs::read(&p).unwrap()));
             }
         }
     }
+    out.sort();
     out
 }
 
 #[test]
-fn reads_in_an_unregistered_folder_register_nothing_and_change_no_bytes() {
-    let state = tempfile::tempdir().unwrap();
-    let daemon = GlobalDaemon::spawn(state.path());
-    let ws = tempfile::tempdir().unwrap();
+fn reading_an_unregistered_folder_registers_nothing() {
+    let state_dir = tempfile::tempdir().unwrap();
+    let daemon = GlobalDaemon::spawn(state_dir.path());
+    let dir = tempfile::tempdir().unwrap();
+    // An old checkout: one line still carries an `id:` tag, one has a ref.
     std::fs::write(
-        ws.path().join("todo.txt"),
-        "(A) buy milk\nplan trip ref:trip\n",
+        dir.path().join("todo.txt"),
+        "buy milk id:01ARZ3NDEKTSV4RRFFQ69G5FAV\nplan trip ref:trip\n",
     )
     .unwrap();
-    std::fs::create_dir_all(ws.path().join("tasks/trip")).unwrap();
-    std::fs::write(ws.path().join("tasks/trip/todo.txt"), "book flights\n").unwrap();
-    let before = snapshot(ws.path());
+    std::fs::create_dir_all(dir.path().join("tasks/trip")).unwrap();
+    std::fs::write(dir.path().join("tasks/trip/todo.txt"), "book flights\n").unwrap();
+    let before = snapshot(dir.path());
 
-    for args in [&["list"][..], &["listall"], &["sub", "2", "listall"]] {
-        let out = daemon.txtodo(ws.path(), args);
+    for args in [
+        &["listall"][..],
+        &["ls", "milk"],
+        &["lint"],
+        &["sub", "2", "listall"],
+        &["--dir", "tasks/trip", "listall"],
+    ] {
+        let out = daemon.txtodo(dir.path(), args);
         let err = String::from_utf8_lossy(&out.stderr);
-        assert!(!out.status.success(), "{args:?} must fail: {err}");
-        assert!(
-            err.contains("not a registered workspace"),
-            "{args:?}: {err}"
-        );
-        assert!(
-            err.contains("txtodo workspace add"),
-            "{args:?} names the fix: {err}"
-        );
+        assert!(!out.status.success(), "{args:?} must refuse");
+        assert!(err.contains("txtodo workspace add"), "{args:?}: {err}");
+        assert!(err.contains("--no-daemon"), "{args:?}: {err}");
     }
-    // `doctor` reports, but must not register the folder either.
-    let _ = daemon.txtodo(ws.path(), &["doctor"]);
 
-    assert!(!ws.path().join(".txtodo").exists(), "no store was made");
-    assert_eq!(snapshot(ws.path()), before, "no byte changed");
-    let listed = daemon.txtodo(state.path(), &["workspace", "list"]);
-    let root = std::fs::canonicalize(ws.path()).unwrap();
+    assert!(!dir.path().join(".txtodo").exists(), "no .txtodo/ made");
+    assert_eq!(snapshot(dir.path()), before, "no byte changed");
+    let list = daemon.txtodo(state_dir.path(), &["workspace", "list"]);
+    let listed = String::from_utf8_lossy(&list.stdout);
+    let here = std::fs::canonicalize(dir.path()).unwrap();
+    assert!(!listed.contains(&here.display().to_string()), "{listed}");
+}
+
+#[test]
+fn a_write_still_registers_the_folder() {
+    let state_dir = tempfile::tempdir().unwrap();
+    let daemon = GlobalDaemon::spawn(state_dir.path());
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("todo.txt"), "").unwrap();
+    let out = daemon.txtodo(dir.path(), &["add", "call mum"]);
     assert!(
-        !String::from_utf8_lossy(&listed.stdout).contains(&root.display().to_string()),
-        "the folder is not in the registry"
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
     );
-    // The direct-file escape hatch the error names still reads it.
-    let direct = daemon.txtodo(ws.path(), &["--no-daemon", "listall"]);
-    assert!(String::from_utf8_lossy(&direct.stdout).contains("buy milk"));
+    let out = daemon.txtodo(dir.path(), &["listall"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(String::from_utf8_lossy(&out.stdout).contains("call mum"));
+}
+
+/// A git checkout's root that holds a list registers on its first read (ADR 0043: a repo is never
+/// offered to a peer, and the daemon keeps `.txtodo/` out of the clone's git).
+#[test]
+fn reading_a_git_root_with_a_list_registers_it_and_keeps_it_out_of_git() {
+    let state_dir = tempfile::tempdir().unwrap();
+    let daemon = GlobalDaemon::spawn(state_dir.path());
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join(".git/info")).unwrap();
+    std::fs::write(dir.path().join("todo.txt"), "water the fern\n").unwrap();
+
+    let out = daemon.txtodo(dir.path(), &["listall"]);
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "{err}");
+    assert!(String::from_utf8_lossy(&out.stdout).contains("water the fern"));
+
+    let list = daemon.txtodo(state_dir.path(), &["workspace", "list"]);
+    let listed = String::from_utf8_lossy(&list.stdout);
+    let here = std::fs::canonicalize(dir.path()).unwrap();
+    assert!(listed.contains(&here.display().to_string()), "{listed}");
+    let exclude = std::fs::read_to_string(dir.path().join(".git/info/exclude")).unwrap();
+    assert!(exclude.lines().any(|l| l == ".txtodo/"), "{exclude}");
 }

@@ -15,7 +15,8 @@
 	import { EditorView, keymap } from "@codemirror/view";
 	import { defaultKeymap, history as cmHistory, historyKeymap } from "@codemirror/commands";
 	import { markdown } from "@codemirror/lang-markdown";
-	import { editNotes, getNotes, type NotesDoc, type TaskRef } from "$lib/daemon";
+	import { editNotes, getNotes, readNoteAsset, saveNoteAsset, type NotesDoc, type TaskRef } from "$lib/daemon";
+	import { imageFiles, imageMarkdown, noteImages } from "$lib/notes/noteImages";
 	import { leaveEditor } from "$lib/escape";
 
 	const SAVE_DEBOUNCE_MS = 500;
@@ -34,6 +35,8 @@
 	// folder and the tag, so the parent must hear the new path, or it reads the tag plus the old
 	// empty path as "an older daemon looked elsewhere" and swaps the editor for an error.
 	let pathUnknown = false;
+	// The notes.md path, workspace-relative: dropped images go in an `assets/` folder beside it.
+	let notesPath = "";
 
 	async function load() {
 		try {
@@ -41,6 +44,7 @@
 			loadError = "";
 			lastSavedText = doc.text;
 			pathUnknown = doc.path === "";
+			notesPath = doc.path;
 			view?.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: doc.text } });
 			onLoaded?.(doc);
 		} catch (e) {
@@ -55,6 +59,7 @@
 			const doc = await getNotes(task);
 			if (doc.path === "") return;
 			pathUnknown = false;
+			notesPath = doc.path;
 			onLoaded?.(doc);
 		} catch {
 			// The save itself worked; the footer path just stays unknown until the next load.
@@ -78,6 +83,31 @@
 		}
 	}
 
+	/** Saves each dropped or pasted image beside notes.md and links it at `at`. The first image of
+	 * a task with no notes yet saves the notes first, which creates the folder (task
+	 * enable-dragging-and-dropping-images-to-a). */
+	async function addImages(files: File[], at: number) {
+		if (!view || files.length === 0) return;
+		saveError = "";
+		try {
+			if (!notesPath) {
+				await editNotes(task, view.state.doc.toString());
+				await reportNewPath();
+				if (!notesPath) throw new Error("the notes folder could not be made");
+			}
+			const lines: string[] = [];
+			for (const file of files) {
+				const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
+				lines.push(imageMarkdown(file.name, await saveNoteAsset(notesPath, file.name, bytes)));
+			}
+			const line = view.state.doc.lineAt(Math.min(at, view.state.doc.length));
+			const insert = (line.length > 0 ? "\n" : "") + lines.join("\n") + "\n";
+			view.dispatch({ changes: { from: line.to, insert } });
+		} catch (e) {
+			saveError = String(e);
+		}
+	}
+
 	onMount(() => {
 		view = new EditorView({
 			state: EditorState.create({
@@ -85,6 +115,26 @@
 				extensions: [
 					EditorView.lineWrapping,
 					markdown(),
+					noteImages({ notesPath: () => notesPath, read: readNoteAsset }),
+					// Drop or paste an image file: it is saved and linked (`$lib/notes/noteImages.ts`).
+					// https://codemirror.net/docs/ref/#view.EditorView^domEventHandlers
+					EditorView.domEventHandlers({
+						drop: (e, v) => {
+							const files = imageFiles(e.dataTransfer?.files);
+							if (files.length === 0) return false;
+							e.preventDefault();
+							const at = v.posAtCoords({ x: e.clientX, y: e.clientY }) ?? v.state.selection.main.head;
+							void addImages(files, at);
+							return true;
+						},
+						paste: (e, v) => {
+							const files = imageFiles(e.clipboardData?.files);
+							if (files.length === 0) return false;
+							e.preventDefault();
+							void addImages(files, v.state.selection.main.head);
+							return true;
+						}
+					}),
 					cmHistory(),
 					// Esc saves what is pending at once and leaves the editor (`$lib/escape.ts`); notes
 					// save as you type, so there is nothing to discard.

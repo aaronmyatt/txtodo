@@ -14,9 +14,12 @@ only how to get unstuck.
 
 ## Why
 
-- The daemon keeps the sync group key in the login keychain: service `txtodo`, account
-  `device/group-epoch-0` (next to `device/device-static`, `device/device-signing`,
-  `device/relay-identity`).
+- The daemon keeps every key in one login-keychain item: service `txtodo`, account
+  `device/vault` (task `can-we-limit-the-number-of-keychain-pass`, 2026-10-17). One item has one
+  access list, so a new signature asks once. Older builds kept one item per key
+  (`device/group-epoch-0`, `device/device-static`, `device/device-signing`,
+  `device/relay-identity`); the first daemon with the vault reads each of those once, moves it
+  into the vault and deletes it, so that one start can still ask for each.
 - macOS ties "Always Allow" to the binary's code signature. An ad-hoc signed build gets a new
   signature on every rebuild, so the keychain asks again. Every local install (`just install`,
   `just install-daemon`, `just install-desktop`) and every release signs with the same
@@ -43,7 +46,9 @@ only how to get unstuck.
    ```
 
 3. When macOS asks whether `txtodod` may use the `txtodo` keychain item, enter your login password
-   and choose **Always Allow**. It can ask once per item (up to four). Then stop it with Ctrl-C.
+   and choose **Always Allow**. It asks once (for `device/vault`); the first start after an upgrade
+   from a build without the vault can ask once more per old item as it moves in. Then stop it
+   with Ctrl-C.
 4. Start the launchd copy again:
 
    ```bash
@@ -62,10 +67,10 @@ only how to get unstuck.
 
 ## Do not delete the item
 
-- `security delete-generic-password -s txtodo -a device/group-epoch-0` removes the group key. The
-  device then no longer belongs to its sync group: you would have to pair it again.
-- Deleting `device/relay-identity` changes this device's relay node id, which breaks any relay
-  allowlist that names it.
+- `security delete-generic-password -s txtodo -a device/vault` removes every key: the group key
+  (the device no longer belongs to its sync group, so you would have to pair it again), the relay
+  identity (its relay node id changes, which breaks any relay allowlist that names it) and the
+  device keys. The same goes for an old per-key item not moved in yet.
 
 ## After every rebuild
 

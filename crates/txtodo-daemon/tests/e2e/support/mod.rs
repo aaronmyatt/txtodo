@@ -18,10 +18,12 @@ pub mod pairing;
 pub mod relay;
 /// Fixture-writing and pre-daemon state-seeding helpers, split out for this file's line budget.
 mod seed;
+/// The constructors that seed a sync group and/or workspace id first, split out the same way.
+mod starts;
 
-use seed::write_tree;
 #[allow(unused_imports)] // each test file uses a different subset of these re-exports
 pub use seed::{kinds, lines_with_ids, seed_group_id, seed_workspace_id};
+use seed::{list_dirs, write_tree};
 
 use hyper_util::rt::TokioIo;
 use std::path::{Path, PathBuf};
@@ -46,11 +48,36 @@ pub type Client = TxtodoClient<Channel>;
 
 /// A running daemon on its own temp dir, with a client and the baselines taken after adoption.
 pub struct Daemon {
+    /// The workspace folder: a list, inside `lists` (`seed::list_dirs`).
     pub dir: tempfile::TempDir,
+    _lists: tempfile::TempDir,
     child: Child,
     client: Client,
     writes_baseline: u64,
     seq_baseline: i64,
+    /// What the daemon wrote to stderr so far, read by a thread: the JSON file log is buffered and
+    /// lags, and an unread pipe fills and stalls a chatty daemon.
+    stderr: std::sync::Arc<std::sync::Mutex<String>>,
+}
+
+/// Copies `child`'s stderr into the returned buffer until the process ends.
+fn drain_stderr(child: &mut Child) -> std::sync::Arc<std::sync::Mutex<String>> {
+    use std::io::BufRead;
+    let buffer = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+    if let Some(pipe) = child.stderr.take() {
+        let sink = std::sync::Arc::clone(&buffer);
+        std::thread::spawn(move || {
+            for line in std::io::BufReader::new(pipe).lines().map_while(Result::ok) {
+                let mut text = sink.lock().unwrap_or_else(|e| e.into_inner());
+                // Bounded: a debug-level daemon can write a great deal.
+                if text.len() < 4_000_000 {
+                    text.push_str(&line);
+                    text.push('\n');
+                }
+            }
+        });
+    }
+    buffer
 }
 
 /// Dials the socket; a daemon that has bound but not yet accepted answers a few hundred ms later,
@@ -99,109 +126,18 @@ impl Daemon {
         Self::start_full(todo, mode, &[("TXTODO_TEST_HOOKS", "1")]).await
     }
 
-    /// `start_with_test_hooks`, but the sync group id is chosen rather than randomly minted:
-    /// `Workspace::open`'s `load_or_mint_group` only mints one when `meta` has none yet, so seeding
-    /// it into a fresh `oplog.db` *before* the daemon (and its `lan.rs` task, which registers the
-    /// mDNS advertisement once at startup off whatever `Workspace::group()` says right then) ever
-    /// starts is the only way to get two real daemons advertising the same group — `DebugSetGroupKey`
-    /// changes the *keystore* key, not a live-updated advertisement (`tests/e2e/lan_discovery.rs`'s
-    /// module doc has the full reasoning).
-    pub async fn start_with_seeded_group(todo: &str, mode: &str, group_id: u128) -> Daemon {
-        Self::start_with_seeded_group_tree(&[("todo.txt", todo)], mode, group_id).await
-    }
-
-    /// `start_with_seeded_group`, for a whole pre-existing directory tree instead of one root
-    /// `todo.txt` — `test-nested-ref-sync`'s fixture (parent/child/grandchild `ref:` directories)
-    /// needs device A to start already holding files at depth. `start_in`'s `SOCKET_WAIT` doc
-    /// already establishes that adoption (the walk in `Workspace::open_with_default_mode`) finishes
-    /// before the socket binds, so every file passed here is registered and has ops by the time
-    /// this returns — pairing can start immediately, no extra per-file settle needed on this side.
-    pub async fn start_with_seeded_group_tree(
-        files: &[(&str, &str)],
-        mode: &str,
-        group_id: u128,
-    ) -> Daemon {
-        let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
-        write_tree(dir.path(), files);
-        seed_group_id(dir.path(), group_id);
-        Self::start_in(dir, mode, &[("TXTODO_TEST_HOOKS", "1")], &[]).await
-    }
-
-    /// `start_with_seeded_group_tree`, plus a pre-agreed `workspace_id` (task
-    /// `daemon-workspace-identity-agreement`): a real two-daemon convergence test needs both sides
-    /// registered under the *same* workspace id, the way a real offer/accept exchange over the
-    /// control channel would leave them — not two independently-minted ones, which the AEAD
-    /// `workspace_id` binding now correctly refuses to sync across. See [`seed_workspace_id`]'s
-    /// own doc for why this, not a live control channel, is what a test can actually drive.
-    pub async fn start_with_seeded_group_and_workspace_tree(
-        files: &[(&str, &str)],
-        mode: &str,
-        group_id: u128,
-        workspace_id: u128,
-    ) -> Daemon {
-        let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
-        write_tree(dir.path(), files);
-        seed_group_id(dir.path(), group_id);
-        seed_workspace_id(dir.path(), workspace_id);
-        Self::start_in(dir, mode, &[("TXTODO_TEST_HOOKS", "1")], &[]).await
-    }
-
-    /// `start_with_seeded_group_and_workspace_tree`, for one root `todo.txt` — the common case,
-    /// mirroring `start_with_seeded_group`'s own relationship to `start_with_seeded_group_tree`.
-    pub async fn start_with_seeded_group_and_workspace(
-        todo: &str,
-        mode: &str,
-        group_id: u128,
-        workspace_id: u128,
-    ) -> Daemon {
-        Self::start_with_seeded_group_and_workspace_tree(
-            &[("todo.txt", todo)],
-            mode,
-            group_id,
-            workspace_id,
-        )
-        .await
-    }
-
-    /// `start`, plus a pre-agreed `workspace_id`: for a test that pairs two daemons for *real*
-    /// (the group key comes from a live pairing ceremony, never seeded), workspace identity is
-    /// still a separate dimension pairing does not touch — both sides need the same id before any
-    /// post-pairing sync can open, same reasoning as
-    /// [`start_with_seeded_group_and_workspace_tree`].
-    pub async fn start_with_workspace_id(todo: &str, workspace_id: u128) -> Daemon {
-        let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
-        write_tree(dir.path(), &[("todo.txt", todo)]);
-        seed_workspace_id(dir.path(), workspace_id);
-        Self::start_in(dir, "tagged", &[], &[]).await
-    }
-
-    /// `start_with_workspace_id`, plus extra environment variables on the spawned process (e.g.
-    /// `TXTODO_LOG`, for a test that reads the real log file rather than only using `log_tail()`
-    /// as a diagnostic) — `tasks/logging-flow-test`'s flow test needs both, `pairing_lan.rs`'s
-    /// real pairing proof needs neither, so this is additive rather than a signature change to the
-    /// existing helper every other call site already uses.
-    pub async fn start_with_workspace_id_and_envs(
-        todo: &str,
-        workspace_id: u128,
-        envs: &[(&str, &str)],
-    ) -> Daemon {
-        let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
-        write_tree(dir.path(), &[("todo.txt", todo)]);
-        seed_workspace_id(dir.path(), workspace_id);
-        Self::start_in(dir, "tagged", envs, &[]).await
-    }
-
     /// `start_with_mode`, with extra environment variables set on the spawned process. Reuse
     /// within this slice (`ABSTRACTIONS.md`'s "real-daemon test harness" entry already tracks this
     /// harness as shared across `tests/e2e/support/mod.rs`/`crash.rs`; this grows it, not duplicates
     /// it — noted there too).
     pub async fn start_full(todo: &str, mode: &str, envs: &[(&str, &str)]) -> Daemon {
-        let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+        let (lists, dir) = list_dirs();
         write_tree(dir.path(), &[("todo.txt", todo)]);
-        Self::start_in(dir, mode, envs, &[]).await
+        Self::start_in(lists, dir, mode, envs, &[]).await
     }
 
     async fn start_in(
+        lists: tempfile::TempDir,
         dir: tempfile::TempDir,
         mode: &str,
         envs: &[(&str, &str)],
@@ -219,16 +155,18 @@ impl Daemon {
         if !extra_args.iter().any(|a| a == "--relay") {
             args.push("--no-relay".into());
         }
-        let child = Command::new(env!("CARGO_BIN_EXE_txtodod"))
+        let mut child = Command::new(env!("CARGO_BIN_EXE_txtodod"))
             .args(&args)
             .args(extra_args)
             // Production redials every 15 s (`lan.rs::RESYNC_INTERVAL`); deadlines here assume 1 s.
             .env("TXTODO_RESYNC_INTERVAL_MS", "1000")
             .envs(envs.iter().copied())
+            .env("TXTODO_LISTS_DIR", lists.path())
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
             .spawn()
             .unwrap_or_else(|e| panic!("spawn txtodod: {e}"));
+        let stderr = drain_stderr(&mut child);
         let socket = dir.path().join(".txtodo").join("txtodod.sock");
         let start = Instant::now();
         while !socket.exists() {
@@ -238,10 +176,12 @@ impl Daemon {
         let client = connect(socket).await;
         let mut d = Daemon {
             dir,
+            _lists: lists,
             child,
             client,
             writes_baseline: 0,
             seq_baseline: 0,
+            stderr,
         };
         d.settle().await;
         let health = d.health().await;
@@ -299,6 +239,8 @@ impl Daemon {
             out.push_str(&format!("--- {} ---\n", entry.path().display()));
             out.push_str(&std::fs::read_to_string(entry.path()).unwrap_or_default());
         }
+        out.push_str("--- stderr ---\n");
+        out.push_str(&self.stderr.lock().unwrap_or_else(|e| e.into_inner()));
         out
     }
 

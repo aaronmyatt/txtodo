@@ -239,6 +239,7 @@ mod tests {
             id: "C".to_owned(),
             before: Some("B".to_owned()),
             after: None,
+            to_file: None,
         };
         assert!(!plannable(&[mv]), "a move still needs the per-op path");
     }

@@ -1,9 +1,9 @@
-//! The `notes.md` merge engine: [`NotesDoc`], one Loro text per notes file (plan M5). The op log
-//! (`txtodo-store`) stays authoritative for persistence and transport; Loro is the in-memory
-//! merge. The todo.txt list document and its op translation went with the daemon's mirror
-//! (ADR 0038). Loro API: <https://docs.rs/loro>.
+//! The Loro merge engine for `notes.md` (plan M5, ADR 0002): [`NotesDoc`], one `LoroText` per
+//! notes document. The todo.txt Loro mirror this crate also held, with its op translation, review
+//! flags and simulator, went with ADR 0038: nothing read it. Loro API: <https://docs.rs/loro>.
 #![forbid(unsafe_code)]
 
 mod notes;
+mod text;
 
 pub use notes::{NotesDoc, NotesDocError};

@@ -30,9 +30,18 @@ Work it through the txtodo MCP tools (`todo_list`, `todo_search`, `todo_get`, `t
 - Build a mental (or scratch) map of: which top-level lines have a `ref:` sub-backlog, which are
   already `x` done, which carry `@human` (a decision only a human makes), and which are already
   claimed (`@doing`).
+- Run `txtodo doctor` once. txtodo readies each repo clone for git on its own (the daemon writes
+  inside `.git`); a `git` warning means it has not, say the daemon was not running: tell the human
+  and name the fix, `txtodo git setup` (it only writes git config and `.gitattributes`). A
+  `mirror` warning means an older build's Remote mirror holds lines this clone lacks: tell the
+  human and name the fix it prints. Don't run `txtodo workspace prune --repo-mirrors` on your own;
+  it moves folders aside.
 
 > **Why:** No surprises mid-loop. The agent sees the whole tree first, so it never starts a task
 > that is already claimed, done, or waiting on you.
+
+> **Why:** A clone of a repo on a second device is its own workspace. Without this check the agent
+> works the clone's stale list instead of the one your other device syncs.
 
 ## 2. Flesh out sub-todos and notes
 

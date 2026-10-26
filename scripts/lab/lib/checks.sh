@@ -187,10 +187,27 @@ check_doctor() {
   fi
 }
 
+# settle_splits <device...>: a split booked while a merge was half way clears only on the next
+# digest, which a device sends a quiet second (the daemon's DIGEST_QUIET) after its last commit.
+# Read straight after converging, doctor still shows it though the files agree (chaos seed
+# 1072683562, 2026-10-11 18:11). Waits up to SPLIT_SETTLE seconds (default 10) for none to be
+# left; one still booked then is a real split, and check_doctor fails it.
+settle_splits() {
+  local deadline=$((SECONDS + ${SPLIT_SETTLE:-10}))
+  while [ "$(split_report settle "$@")" = split ]; do
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      log "check: a same-ops split is still booked ${SPLIT_SETTLE:-10}s after converging (splits-settle.txt)"
+      return 0
+    fi
+    sleep 1
+  done
+}
+
 # final_checks <device...>: run after heal_all.
 final_checks() {
   local dev
   expect_converged final "${CONVERGE_TIMEOUT:-180}" "$@"
+  settle_splits "$@"
   collect_all "$@"
   editor_took "$@"
   for dev in "$@"; do

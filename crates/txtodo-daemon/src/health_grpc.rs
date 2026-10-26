@@ -47,6 +47,7 @@ impl TxtodoService {
             relay_bound,
             offers_problem,
             offers_problem_age_ms,
+            dropped_from_group: ws.identity().peer_keys().dropped_from_group(),
             ..pb::HealthResponse::default()
         }))
     }

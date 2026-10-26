@@ -57,6 +57,18 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 		case "build_info":
 			// The mock daemon is always "this build": no mismatch banner in mock mode.
 			return { version: "0.0.2", release_date: "2026-09-20", daemon_version: "0.0.2", daemon_release_date: "2026-09-20" } as T;
+		case "check_updates":
+			// The mock is always the newest release: the Updates row's quiet path.
+			return { current: "0.0.2", latest: "v0.0.2", newer: false, command: "" } as T;
+		case "run_upgrade":
+			return "txtodo: upgraded (mock)" as T;
+		case "relaunch":
+		case "set_change_notices":
+			return undefined as T;
+		case "save_note_asset":
+			return `assets/00000000-${args?.name as string}` as T;
+		case "read_note_asset":
+			return [] as T;
 		case "apply":
 			return applyMutations(args?.path as string, args?.mutations as Mutation[]) as unknown as T;
 		case "history":
@@ -89,6 +101,8 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 			return mockAnswerOffer(args ?? {}) as unknown as T;
 		case "device_list":
 			return mockDevices() as T;
+		case "group_status":
+			return { dropped_from_group: false } as T;
 		case "device_remove":
 			return mockDeviceRemove(args ?? {}) as unknown as T;
 		case "token_list":
@@ -146,6 +160,32 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 			const name = (args?.name as string).trim();
 			ws.name = name || (ws.root.split("/").filter(Boolean).pop() ?? "");
 			return { ...ws } as T;
+		}
+		// Named lists (task two-kinds-of-workspace): the mock keeps them in the same array, under a
+		// fake lists folder. Like the real daemon, a list answers to what it shows or its folder.
+		case "new_list": {
+			const name = (args?.name as string).trim().toLowerCase();
+			const root = `/mock/lists/${name}`;
+			let ws = workspaces.find((w) => w.root === root);
+			if (!ws) {
+				ws = { id: fakeUlid(), root, added_at_ms: NOW_MS, root_exists: true, has_state: false, load_state: "ready", load_error: "", name, kind: "list" };
+				workspaces.push(ws);
+			}
+			return { ...ws } as T;
+		}
+		case "rename_list": {
+			const query = (args?.list as string).trim().toLowerCase();
+			const ws = workspaces.find((w) => w.kind === "list" && (w.name === query || w.root.endsWith(`/${query}`)));
+			if (!ws) throw new Error(`no list named ${query}`);
+			ws.name = (args?.name as string).trim().toLowerCase();
+			return { ...ws } as T;
+		}
+		case "remove_list": {
+			const query = (args?.list as string).trim().toLowerCase();
+			const idx = workspaces.findIndex((w) => w.kind === "list" && (w.name === query || w.root.endsWith(`/${query}`)));
+			if (idx < 0) throw new Error(`no list named ${query}`);
+			const [gone] = workspaces.splice(idx, 1);
+			return `${gone.root}.removed` as T;
 		}
 		case "switch_workspace":
 			setCurrentWorkspaceRoot(args?.root as string);

@@ -80,6 +80,7 @@ impl WorkspaceRegistry {
             return Ok(existing.id);
         }
         self.refuse_overlap(&canonical)?;
+        keep_txtodo_out_of_git(&canonical);
         let id = WorkspaceId::new(clock.new_ulid());
         self.registry.insert(&NewWorkspaceEntry {
             id,
@@ -114,23 +115,6 @@ impl WorkspaceRegistry {
             return Ok(());
         }
         self.refuse_overlap(&canonical)?;
-        self.insert_adopted(id, canonical, clock)
-    }
-
-    /// [`Self::adopt`] for a root this device released a moment ago under another id: the pairing
-    /// rekey (`WorkspaceCatalog::rekey_registry`) and its rollback. It is the same folder, not a
-    /// new one, so an overlap it already had is not refused here: a registry from before the
-    /// refusal keeps working, and `txtodo doctor` reports the overlap instead.
-    pub fn adopt_released(
-        &mut self,
-        id: WorkspaceId,
-        root: &Path,
-        clock: &dyn Clock,
-    ) -> Result<(), WorkspaceRegistryError> {
-        let canonical = canonical_root(root)?;
-        if self.adopted_already(id, &canonical)? {
-            return Ok(());
-        }
         self.insert_adopted(id, canonical, clock)
     }
 
@@ -179,8 +163,20 @@ impl WorkspaceRegistry {
     /// writes as outside edits (sync-drift line 3). Rows already in the registry are never
     /// refused or dropped here; they keep loading, and `txtodo doctor` flags them.
     fn refuse_overlap(&self, canonical: &str) -> Result<(), WorkspaceRegistryError> {
+        self.refuse_overlap_but(canonical, None)
+    }
+
+    /// [`Self::refuse_overlap`], leaving out `skip`'s own row (a bind moves that row's root).
+    fn refuse_overlap_but(
+        &self,
+        canonical: &str,
+        skip: Option<WorkspaceId>,
+    ) -> Result<(), WorkspaceRegistryError> {
         let root = Path::new(canonical);
         for row in self.registry.list_active()? {
+            if Some(row.id) == skip {
+                continue;
+            }
             let registered = Path::new(&row.root);
             if let Some(overlap) = txtodo_workspace_paths::root_overlap(root, registered) {
                 return Err(WorkspaceRegistryError::Overlap {
@@ -204,6 +200,77 @@ impl WorkspaceRegistry {
         clock: &dyn Clock,
     ) -> Result<bool, WorkspaceRegistryError> {
         Ok(self.registry.remove(id, clock.now_ms())?)
+    }
+
+    /// Brings a removed `id` back at its old root (task two-kinds-of-workspace): a named list
+    /// removed here and made again, whose id is its name's and so cannot be minted afresh.
+    /// `false` for an unknown or active id. The caller has checked no other active row holds the
+    /// root ([`txtodo_store::Registry::restore`]).
+    pub fn restore(
+        &mut self,
+        id: WorkspaceId,
+        clock: &dyn Clock,
+    ) -> Result<bool, WorkspaceRegistryError> {
+        Ok(self.registry.restore(id, clock.now_ms())?)
+    }
+
+    /// The folders scanned for repos (task two-kinds-of-workspace), oldest first.
+    pub fn scan_roots(&self) -> Result<Vec<String>, WorkspaceRegistryError> {
+        Ok(self.registry.scan_roots()?)
+    }
+
+    /// Adds a scan root (an absolute path); `false` when it was there.
+    pub fn add_scan_root(
+        &mut self,
+        root: &str,
+        clock: &dyn Clock,
+    ) -> Result<bool, WorkspaceRegistryError> {
+        Ok(self.registry.add_scan_root(root, clock.now_ms())?)
+    }
+
+    /// Removes a scan root; `false` when it was not there.
+    pub fn remove_scan_root(&mut self, root: &str) -> Result<bool, WorkspaceRegistryError> {
+        Ok(self.registry.remove_scan_root(root)?)
+    }
+
+    /// Gives a registry that never had scan roots its defaults, once.
+    pub fn seed_scan_roots(
+        &mut self,
+        defaults: &[String],
+        clock: &dyn Clock,
+    ) -> Result<bool, WorkspaceRegistryError> {
+        Ok(self.registry.seed_scan_roots(defaults, clock.now_ms())?)
+    }
+
+    /// When the last scan finished, if one did.
+    pub fn last_scan_ms(&self) -> Result<Option<u64>, WorkspaceRegistryError> {
+        Ok(self.registry.last_scan_ms()?)
+    }
+
+    /// Records that a scan finished now.
+    pub fn record_scan(&mut self, clock: &dyn Clock) -> Result<(), WorkspaceRegistryError> {
+        Ok(self.registry.set_last_scan_ms(clock.now_ms())?)
+    }
+
+    /// Whether `root` was taken off the registry and is not registered now.
+    pub fn root_was_removed(&self, root: &Path) -> Result<bool, WorkspaceRegistryError> {
+        Ok(self
+            .registry
+            .root_was_removed(&root.display().to_string())?)
+    }
+
+    /// Points the active `id` at `root` (a bind, task spike-txtodo-should-merge-remote-workspa):
+    /// the id stays, the root moves. Refused like `add` when `root` overlaps another active
+    /// workspace; the caller removes whatever was registered at `root` itself first. `false` for
+    /// an unknown or removed id. Never touches either folder.
+    pub fn set_root(
+        &mut self,
+        id: WorkspaceId,
+        root: &Path,
+    ) -> Result<bool, WorkspaceRegistryError> {
+        let canonical = canonical_root(root)?;
+        self.refuse_overlap_but(&canonical, Some(id))?;
+        Ok(self.registry.set_root(id, &canonical)?)
     }
 
     /// Records that `id` was just used (task `daemon-early-bind`); `false` for an unknown or removed
@@ -277,5 +344,15 @@ fn entry_of(row: WorkspaceRow) -> WorkspaceEntry {
         root_exists,
         has_state,
         last_active_ms: row.last_active_ms,
+    }
+}
+
+/// A new workspace that is a git clone is readied before the daemon first opens it (task
+/// two-kinds-of-workspace, `repo_git.rs`): `.txtodo/` excluded, the lists set to merge line by line,
+/// the merge driver in its config. Best effort: a refusal is logged, never a failure to register. A
+/// folder with no `.git` (every list and mirror) is untouched.
+fn keep_txtodo_out_of_git(root: &str) {
+    if let Err(e) = crate::repo_git::prepare(Path::new(root)) {
+        tracing::warn!(root, error = %e, "repo_git_prepare_failed");
     }
 }

@@ -25,6 +25,9 @@ pub(crate) enum PairingStateError {
     Store(txtodo_store::StoreError),
     /// The stored group key is not `KEY_BYTES` long (the keystore was edited or corrupted by hand).
     CorruptGroupKey(usize),
+    /// This device is on an epoch whose key the keystore does not hold, so it has nothing to hand a
+    /// joiner (the keystore was edited, or a rotation was cut short).
+    MissingGroupKey(u32),
 }
 
 impl std::fmt::Display for PairingStateError {
@@ -46,6 +49,9 @@ impl std::fmt::Display for PairingStateError {
             PairingStateError::Session(e) => write!(f, "{e}"),
             PairingStateError::KeyStore(e) => write!(f, "{e}"),
             PairingStateError::Store(e) => write!(f, "{e}"),
+            PairingStateError::MissingGroupKey(epoch) => {
+                write!(f, "no group key is stored for epoch {epoch}")
+            }
             PairingStateError::CorruptGroupKey(len) => {
                 write!(f, "stored group key is {len} bytes, not {KEY_BYTES}")
             }

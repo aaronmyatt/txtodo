@@ -12,7 +12,7 @@
 use crate::actor::{Commit, CommitTail, FileActor};
 use crate::commit::SYNC_SOURCE;
 use crate::handle::{ActorError, ActorHandle, ActorMsg};
-use crate::state::{DocState, StateError};
+use crate::state::StateError;
 use crate::sync_park::apply_parking;
 use txtodo_model::{Op, OpKind, TaskId};
 
@@ -60,7 +60,11 @@ impl FileActor {
             ops.iter().all(|o| o.file == self.cfg.path),
             "the caller routes by op.file before calling here"
         );
-        let ops = crate::held_ops::drop_held(&self.lock_store(), ops)?;
+        // Again here, where runs for this file are one at a time: two sessions to one peer (LAN
+        // and relay) can both pass `lan_apply.rs`'s held check with one op before either commits,
+        // and the second insert then failed the `UNIQUE` op id and refused its whole run (lab
+        // lan-to-relay flake, 2026-10-02).
+        let ops = self.not_yet_held(ops)?;
         if ops.is_empty() {
             // A run another session landed first: it may have left this file's write owed.
             if !defer {
@@ -93,6 +97,18 @@ impl FileActor {
         Ok(())
     }
 
+    /// `ops` without those the log already holds by id; the first copy stays (append-only).
+    fn not_yet_held(&self, ops: Vec<Op>) -> Result<Vec<Op>, ActorError> {
+        let store = self.lock_store();
+        let mut fresh = Vec::with_capacity(ops.len());
+        for op in ops {
+            if store.op_by_id(op.id)?.is_none() {
+                fresh.push(op);
+            }
+        }
+        Ok(fresh)
+    }
+
     /// HLC receive rule for the batch's newest stamp (`Hlc::merge`), so this device's next op
     /// sorts after every line it now holds: a peer's line placed "later" than a local op would
     /// otherwise be skipped over by it (task insert-order, `state_order.rs`). A stamp more than
@@ -104,6 +120,7 @@ impl FileActor {
         let before = self.hlc;
         if let Err(e) = self.hlc.merge(newest, self.clock.now_ms()) {
             log_stamp_not_merged(op_file(ops), &e);
+            crate::stamp_floor::hold(&mut self.ahead_floor, newest);
         }
         debug_assert!(self.hlc >= before, "merge never goes back");
         debug_assert_eq!(self.hlc.device, self.cfg.device);
@@ -120,35 +137,8 @@ fn log_stamp_not_merged(file: Option<&txtodo_model::FilePath>, e: &txtodo_model:
     tracing::warn!(file = file.map(|f| f.to_string()), error = %e, "sync_stamp_not_merged");
 }
 
-/// Applies `ops` to `state` one commit (same HLC stamp) at a time; within a commit, an op that
-/// fails is retried after the others, until a round applies nothing new. Returns the ops that
-/// never applied, with why.
-pub(crate) fn apply_leniently<'a>(
-    state: &mut DocState,
-    ops: &'a [Op],
-) -> Vec<(&'a Op, StateError)> {
-    let mut skipped = Vec::new();
-    for group in ops.chunk_by(|a, b| a.hlc == b.hlc) {
-        let mut pending: Vec<&Op> = group.iter().collect();
-        // Bounded: every round but the last applies at least one op.
-        loop {
-            let before = pending.len();
-            let mut failed = Vec::new();
-            for op in pending {
-                if let Err(e) = state.apply(op) {
-                    failed.push((op, e));
-                }
-            }
-            if failed.is_empty() || failed.len() == before {
-                skipped.extend(failed);
-                break;
-            }
-            pending = failed.into_iter().map(|(op, _)| op).collect();
-        }
-    }
-    debug_assert!(skipped.len() <= ops.len());
-    skipped
-}
+/// Moved to the engine (ADR 0042); re-exported for `external`, `log_repair`, `pending_save`.
+pub(crate) use txtodo_engine::apply::apply_leniently;
 
 fn log_skipped(op: &Op, e: &StateError) {
     tracing::warn!(

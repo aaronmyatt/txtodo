@@ -1,0 +1,4 @@
+x 2026-10-11 2026-10-11 Decide how image bytes are written and synced: A desktop writes assets/ locally, B daemon PutAsset + blob sync (ADR); see notes +m11 @desktop — decided (agent): A, see notes.md
+x 2026-10-11 2026-10-11 desktop: drop or paste an image in the notes editor saves it under the ref's assets/ and inserts ![name](assets/...) +m11 @desktop — commands_assets.rs + NotesEditor drop/paste; e2e pastes a PNG
+x 2026-10-11 2026-10-11 desktop: notes editor shows a linked image inline under its line (widget decoration) +m11 @desktop — noteImages.ts block widgets via a StateField (a view plugin may not hold block decorations)
+x 2026-10-11 2026-10-11 Complete the parent line in ./todo.txt +m11

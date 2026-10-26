@@ -9,6 +9,8 @@ use crate::state_settings::Pairing;
 use crate::state_shell::Link;
 use crate::theme::ThemeMode;
 
+mod workspaces;
+
 /// What a row does.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Act {
@@ -22,10 +24,12 @@ pub enum Act {
     LengthHint,
     /// Switch to this workspace.
     OpenWorkspace(String),
-    /// Unregister this workspace (files untouched).
+    /// Unregister this workspace (files untouched); a list moves its folder aside instead.
     RemoveWorkspace(String),
     /// Register the typed folder.
     AddWorkspace,
+    /// Make a list named as typed.
+    NewList,
     /// Give this workspace the typed name, which every paired device shows.
     RenameWorkspace(String),
     /// Accept the typed pairing code.
@@ -53,6 +57,10 @@ pub enum Act {
     RevokeToken(String),
     /// Read the activity feed again.
     RefreshActivity,
+    /// Ask `txtodo upgrade --check` for the newest release.
+    CheckUpdates,
+    /// Quit and run `txtodo upgrade`.
+    Upgrade,
 }
 
 /// One row.
@@ -110,7 +118,7 @@ pub fn rows(card: SettingsCard, state: &AppState) -> Vec<SRow> {
     match card {
         SettingsCard::General => general(state),
         SettingsCard::Appearance => appearance(state),
-        SettingsCard::Workspaces => workspaces(state),
+        SettingsCard::Workspaces => workspaces::rows(state),
         SettingsCard::Shortcuts => crate::manifest::shortcut_rows(),
         SettingsCard::Devices => devices(state),
         SettingsCard::Tokens => tokens(state),
@@ -141,6 +149,7 @@ fn general(state: &AppState) -> Vec<SRow> {
             "Restart",
             "run `txtodo daemon stop`, then `txtodo daemon start`",
         ),
+        crate::app_upgrade::row(state),
         not_here("Pin on top", "A terminal has no window to pin."),
         not_here("Menu bar", "A terminal has no tray or menu bar icon."),
     ]
@@ -171,52 +180,6 @@ fn appearance(state: &AppState) -> Vec<SRow> {
     ]
 }
 
-fn workspaces(state: &AppState) -> Vec<SRow> {
-    let mut out: Vec<SRow> = state
-        .settings
-        .workspaces
-        .iter()
-        .map(|w| {
-            let mut label = w.name.clone();
-            if w.current {
-                label.push_str(" \u{b7} current");
-            }
-            let count = match (w.missing, w.open) {
-                (true, _) => "missing".to_owned(),
-                (false, Some(n)) => format!("{n} open"),
-                (false, None) => "not loaded".to_owned(),
-            };
-            let removable = !w.current && !w.is_default;
-            SRow {
-                label,
-                value: format!("{} \u{b7} {count}", w.root),
-                act: Some(Act::OpenWorkspace(w.id.clone())),
-                remove: removable.then(|| Act::RemoveWorkspace(w.id.clone())),
-                ..SRow::default()
-            }
-        })
-        .collect();
-    // The open one only: the header names it, and the field starts from its name. Another
-    // workspace is renamed from there (manifest `workspace.rename`).
-    if let Some(w) = state.settings.workspaces.iter().find(|w| w.current) {
-        out.push(field(
-            "Rename the open one",
-            "the name every paired device shows; empty clears it",
-            Act::RenameWorkspace(w.id.clone()),
-        ));
-    }
-    out.push(field(
-        "Add a workspace",
-        "type a folder path, Enter adds it",
-        Act::AddWorkspace,
-    ));
-    out.push(not_here(
-        "Folder picker",
-        "A terminal has no folder picker: type the path.",
-    ));
-    out
-}
-
 fn devices(state: &AppState) -> Vec<SRow> {
     let mut out = vec![
         field(
@@ -235,7 +198,20 @@ fn devices(state: &AppState) -> Vec<SRow> {
         "Scan a code",
         "A terminal has no camera: paste the code.",
     ));
+    if state.settings.dropped_from_group {
+        out.push(info(
+            "Dropped from the group",
+            "the other devices no longer share their key with this one: pair again, here or on one of them",
+        ));
+    }
     for d in &state.settings.devices {
+        if !d.dropped.is_empty() {
+            out.push(info(
+                &d.name,
+                format!("{}; pair again to bring it back", d.dropped),
+            ));
+            continue;
+        }
         let seen = if d.is_self {
             "this device".to_owned()
         } else if d.last_seen_ms == 0 {

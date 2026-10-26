@@ -7,7 +7,12 @@ use clap::{Parser, Subcommand};
 
 /// todo.sh-compatible todo.txt tool. Commands and aliases match todo.sh; line numbers are the ids.
 #[derive(Debug, Parser)]
-#[command(name = "txtodo", version = crate::buildinfo::VERSION_LINE, about)]
+#[command(
+    name = "txtodo",
+    version = crate::buildinfo::VERSION_LINE,
+    about,
+    before_long_help = crate::logo::LOGO
+)]
 pub struct Cli {
     /// Todo directory (overrides $TXTODO_TODO_DIR and config `todo_dir`).
     #[arg(long, global = true, value_name = "DIR")]
@@ -32,12 +37,17 @@ pub struct Cli {
     /// Ignore a running daemon and edit the files directly (M2 behaviour).
     #[arg(long, global = true)]
     pub no_daemon: bool,
+    /// Run the command on this named list (see `txtodo lists`) instead of the workspace here:
+    /// the name it shows, or the name it was made under. Asks the daemon where the list lives.
+    #[arg(long, global = true, value_name = "NAME", conflicts_with = "dir")]
+    pub list: Option<String>,
     /// A list inside the workspace, relative to its root, to run the command on instead of the
     /// root list. `sub` passes it, so a sub-list is worked as one more list of its workspace,
     /// never registered as a workspace of its own (sync-drift line 3). Hidden: `sub ITEM#` is
-    /// the way to name one. Ref: <https://docs.rs/clap/latest/clap/struct.Arg.html#method.hide>
+    /// the way to name one. Was `--list` before named lists took that name (task
+    /// two-kinds-of-workspace). Ref: <https://docs.rs/clap/latest/clap/struct.Arg.html#method.hide>
     #[arg(long, global = true, value_name = "FILE", hide = true)]
-    pub list: Option<String>,
+    pub sublist: Option<String>,
     #[command(subcommand)]
     pub command: Command,
 }
@@ -99,7 +109,8 @@ pub enum Command {
     Fmt,
     /// Report quirks and file hygiene in todo.txt.
     Lint,
-    /// List tasks matching every TERM (`-term` excludes), sorted.
+    /// List open tasks matching every TERM (`-term` excludes), sorted. Done tasks show only when a
+    /// term asks for them (`is:done`); `listall` shows every line.
     #[command(visible_alias = "ls")]
     List {
         /// Search terms; `-term` excludes.
@@ -143,12 +154,24 @@ pub enum Command {
         #[arg(required = true, num_args = 1..)]
         text: Vec<String>,
     },
-    /// Move a task to another file in the todo directory (its line stays blank).
+    /// Move a task to another list in the todo directory. Through the daemon its `ref:` folder
+    /// moves too; without one, its line stays blank (todo.sh).
     #[command(visible_alias = "mv")]
     Move {
         /// Line number.
         item: String,
-        /// Destination file name.
+        /// Destination file name, relative to the todo directory (e.g. `tasks/trip/todo.txt`).
+        dest: String,
+        /// Source file name (default todo.txt).
+        src: Option<String>,
+    },
+    /// Copy a task to the end of another list: a new task without the `id:` and `ref:` (its notes
+    /// and sub-list stay with the original).
+    #[command(visible_alias = "cp")]
+    Copy {
+        /// Line number.
+        item: String,
+        /// Destination file name, relative to the todo directory.
         dest: String,
         /// Source file name (default todo.txt).
         src: Option<String>,
@@ -272,8 +295,7 @@ pub enum Command {
     /// Runs COMMAND with its directory scoped to a line's `ref:` sub-list (daemon mode, rule 12);
     /// a scoped `todo.sh -d`.
     Sub {
-        /// Line number in todo.txt, or the sub-list's slug path (`trip`, nested `trip/flights`),
-        /// which does not move when a line above completes.
+        /// Line number in todo.txt, or a `ref:` slug path: `trip`, nested `trip/flights`.
         item: String,
         /// The command (and its own arguments) to run inside that directory.
         #[arg(required = true, trailing_var_arg = true, allow_hyphen_values = true)]
@@ -292,11 +314,54 @@ pub enum Command {
         #[command(subcommand)]
         action: Option<commands::workspace::Action>,
     },
+    /// Named lists that txtodo syncs between your own devices: `new NAME`, `ls` (default),
+    /// `rename LIST NEW`, `rm LIST`, `import DIR [NAME]`. Work on one with `--list NAME`.
+    Lists {
+        #[command(subcommand)]
+        action: Option<commands::lists::Action>,
+    },
     /// The agent playbook for working this backlog: a Claude Code Skill under the user's global
     /// `~/.claude/skills`, and a marked section in this project's `AGENTS.md` (cross-agent).
     Skill {
         #[command(subcommand)]
         action: commands::skill::Action,
+    },
+    /// The daemon's OS notice for changes from another device (ADR 0041): `on`, `off`, `status`.
+    Notices {
+        #[command(subcommand)]
+        action: commands::notices::Action,
+    },
+    /// Upgrades to the newest release the way this copy was installed (Homebrew, the install
+    /// script, or a source build), then restarts the daemon. `--check` only says what it would do.
+    Upgrade {
+        /// Print this build, the newest release and the upgrade command; change nothing.
+        #[arg(long)]
+        check: bool,
+    },
+    /// The git clones with a todo list that txtodo knows (task two-kinds-of-workspace): `ls`
+    /// (default), `scan` to look for more now, `add DIR`, `roots` to see or change the folders it
+    /// scans. Git syncs a repo's list; txtodo only keeps the daemon watching it.
+    Repos {
+        #[command(subcommand)]
+        action: Option<commands::repos::Action>,
+    },
+    /// Git helpers for a repo's todo lists (task two-kinds-of-workspace): `setup` makes this clone
+    /// merge todo lists line by line.
+    Git {
+        #[command(subcommand)]
+        action: commands::git_setup::Action,
+    },
+    /// The git merge driver for todo lists (task two-kinds-of-workspace): merges the file git calls
+    /// `%A` with `%B`, three ways against `%O`, line by line and without losing a line, and writes
+    /// the result into `%A`. `txtodo git setup` installs it; it is not meant to be typed.
+    #[command(name = "merge-driver")]
+    MergeDriver {
+        /// The common ancestor (git's `%O`).
+        base: String,
+        /// Our version (git's `%A`); the merge is written here.
+        ours: String,
+        /// Their version (git's `%B`).
+        theirs: String,
     },
     /// Lists `ref:` directories no line points to; deletes them only with `--yes` (daemon mode,
     /// rule 10).
@@ -308,4 +373,16 @@ pub enum Command {
         #[arg(long)]
         yes: bool,
     },
+}
+
+impl Command {
+    /// Whether this is about the daemon's registry of workspaces, not about a folder's document:
+    /// asking its layout, or announcing the default workspace, would register or create the
+    /// resolved `--dir`/cwd as a side effect.
+    pub fn is_registry(&self) -> bool {
+        matches!(
+            self,
+            Command::Workspace { .. } | Command::Lists { .. } | Command::Repos { .. }
+        )
+    }
 }

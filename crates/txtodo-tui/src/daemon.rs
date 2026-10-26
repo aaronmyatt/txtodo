@@ -124,7 +124,8 @@ impl Daemon {
             .connect_timeout(CONNECT_TIMEOUT);
         let channel = endpoint.connect_lazy();
         Ok(Daemon {
-            inner: pb::txtodo_client::TxtodoClient::new(channel),
+            inner: pb::txtodo_client::TxtodoClient::new(channel)
+                .max_decoding_message_size(txtodo_proto::MAX_MESSAGE_BYTES),
             sock: sock.to_path_buf(),
             selector,
         })
@@ -217,6 +218,9 @@ impl Daemon {
         let req = pb::WatchRequest {
             paths,
             workspace: self.selector.clone(),
+            // A toast in a terminal nobody may be looking at is no reason to hold the daemon's OS
+            // notice (ADR 0041).
+            shows_notices: false,
         };
         Ok(self.inner.watch(req).await?.into_inner())
     }
@@ -230,7 +234,8 @@ impl Daemon {
         Ok(self.inner.apply(req).await?.into_inner())
     }
 
-    /// The duplicate groups of `path` (ADR 0032), for the `r` sheet.
+    /// `ListConflicts` for `path`: its duplicate groups (ADR 0032), for the `r` pane. Its flags
+    /// list is always empty since ADR 0038.
     pub async fn list_conflicts(
         &mut self,
         path: &str,

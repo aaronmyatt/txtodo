@@ -6,6 +6,20 @@
 use std::path::Path;
 use txtodo_proto::v1 as pb;
 
+/// A folder for lists and a workspace folder inside it: the shape of a list, the kind of workspace
+/// txtodo syncs (ADR 0043, task `two-kinds-of-workspace`). The daemon is told the first through
+/// `$TXTODO_LISTS_DIR` (`Daemon::start_in`), so the second counts as a list. The caller keeps
+/// both: the lists folder has to outlive the workspace folder.
+/// Ref: https://docs.rs/tempfile/latest/tempfile/struct.Builder.html#method.tempdir_in
+pub(super) fn list_dirs() -> (tempfile::TempDir, tempfile::TempDir) {
+    let lists = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let list = tempfile::Builder::new()
+        .prefix("work-")
+        .tempdir_in(lists.path())
+        .unwrap_or_else(|e| panic!("list tempdir: {e}"));
+    (lists, list)
+}
+
 /// Writes each `(relative path, contents)` pair under `dir`, creating parent directories as
 /// needed. The general form both `start_full`'s single `todo.txt` and
 /// `start_with_seeded_group_tree`'s whole nested-ref fixture go through, so a multi-file workspace

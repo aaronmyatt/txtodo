@@ -96,8 +96,8 @@ fn removing_a_real_peer_rotates_the_epoch_and_tombstones_the_row() {
     let remaining = store.device(device(2)).unwrap().unwrap();
     assert!(remaining.removed_at_ms.is_none());
     assert_eq!(
-        remaining.key_epoch, 1,
-        "the remaining peer's epoch advanced"
+        remaining.key_epoch, 0,
+        "the remaining peer's epoch is what it is known to hold: it advances when the peer says it has the new one"
     );
     drop(store);
 

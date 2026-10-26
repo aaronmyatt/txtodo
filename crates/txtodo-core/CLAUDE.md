@@ -25,6 +25,15 @@ bar's chips, ported from desktop's `editPopoverLogic.ts` with its tests mirrored
 `universal::{days_between, DueBucket, due_bucket, due_label, GroupBy, RowFacts, group_name, group}` (same
 task): the Universal screen's due buckets, due badges and grouping in the c2 mockup's order, against a
 `today` the caller passes (ADR 0011: the client's local calendar).
+`notice::{verb_of, Verb, OpFacts, Notice, Debouncer (`new`, `only_from`), QUIET_MS, MAX_WAIT_MS}` (2026-10-11, task
+`change-notifications`): folds another client's `Watch` ops into one worded notice per burst for the
+desktop and the TUI; the caller passes `now`, so no clock here.
+`merge3(base, ours, theirs)` (2026-10-25, task `two-kinds-of-workspace`): the three-way merge of todo.txt text
+that `txtodo merge-driver` runs. Lines are compared by exact text; per distinct line the result keeps
+`base - max(deleted by either side) + max(added by either side)` copies, so an addition on either side
+is kept, a completion leaves the done line and drops the open one, two different edits of one line
+both stay, and the same change made on both sides counts once. The set of lines is the same whichever
+side is ours; the order follows ours, with theirs' additions after their predecessor.
 Mode contract: strict = the ABNF exactly (a bare `x` is description text); lenient = total over `&str`, quirks recorded.
 
 ## Invariants

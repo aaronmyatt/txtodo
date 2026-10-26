@@ -5,8 +5,8 @@
 //
 // Design invariant (design §7 thin clients): even in raw mode the UI never parses or writes
 // todo.txt itself. `computeDelta` below turns a raw-buffer edit into the same intent-level
-// `Mutation`s `$lib/daemon.ts::applyMutations` already sends for the edit popover and the
-// duplicate sheet's keeps — the one reconcile path this app can reach from
+// `Mutation`s `$lib/daemon.ts::applyMutations` already sends for the edit popover — the one
+// reconcile path this app can reach from
 // `apps/desktop` without a daemon/proto change (this slice's scope is `apps/desktop` only; see
 // this task's "As built" note for why a dedicated whole-document external-edit RPC, closer to
 // what `crates/txtodo-core/src/diff.rs`'s `diff_lines` does for a real file-watcher edit, is out

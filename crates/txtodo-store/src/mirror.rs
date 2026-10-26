@@ -1,7 +1,7 @@
-//! The Loro mirror snapshot (plan M4): the daemon's snapshot of a document at a log position; ops
-//! after it are replayed on open. Local and rebuildable. Only `notes.md` documents write it now:
-//! the todo.txt mirror is gone (ADR 0038) and its old rows stay, unread. So do the old
-//! `review_flags` rows (migration 0003): same-word review went with it, and nothing reads them.
+//! The Loro mirror snapshot (plan M4): the daemon's `NotesDoc` for a notes.md at a log position;
+//! ops after it are replayed on open. A todo.txt commit lands none (ADR 0038). The needs_review
+//! flags that shared this file went with conflict review A (ADR 0038); their `review_flags` table
+//! stays in the schema, its old rows ignored, like old todo.txt `mirrors` rows.
 //! Ref: https://www.sqlite.org/lang_upsert.html
 
 use rusqlite::{OptionalExtension, params};
@@ -27,11 +27,7 @@ impl Store {
         if snapshot.len() > MAX_MIRROR_BYTES {
             return Err(StoreError::ProjectionTooLarge(snapshot.len()));
         }
-        debug_assert!(seq.0 >= 0, "seqs start at 1; 0 means before any op");
-        self.conn
-            .execute(UPSERT_MIRROR, params![file.as_str(), snapshot, seq.0])
-            .map_err(StoreError::query("upsert mirror"))?;
-        Ok(())
+        upsert_mirror_on(&self.conn, file, snapshot, seq)
     }
 
     /// The stored mirror snapshot and its log position, if any.
@@ -43,4 +39,20 @@ impl Store {
             .optional()
             .map_err(StoreError::query("select mirror"))
     }
+}
+
+/// Upserts the mirror row on `conn`; the caller owns the transaction.
+pub(crate) fn upsert_mirror_on(
+    conn: &rusqlite::Connection,
+    file: &FilePath,
+    snapshot: &[u8],
+    seq: Seq,
+) -> Result<(), StoreError> {
+    if snapshot.len() > MAX_MIRROR_BYTES {
+        return Err(StoreError::ProjectionTooLarge(snapshot.len()));
+    }
+    debug_assert!(seq.0 >= 0, "seqs start at 1; 0 means before any op");
+    conn.execute(UPSERT_MIRROR, params![file.as_str(), snapshot, seq.0])
+        .map_err(StoreError::query("upsert mirror"))?;
+    Ok(())
 }

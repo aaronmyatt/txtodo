@@ -49,6 +49,10 @@ impl FileActor {
     /// just landed durably (`Err` only means no receiver is left, which the guard excludes).
     pub(crate) fn broadcast(&self, change: &crate::handle::Change) {
         self.cfg.stats.count_commit();
+        // Another device's ops may be worth a notice (ADR 0041); the hub keeps only `sync`.
+        if let Some(hub) = crate::notices::hub() {
+            hub.take(change);
+        }
         if self.changes.receiver_count() > 0 {
             let _ = self.changes.send(change.clone());
         }

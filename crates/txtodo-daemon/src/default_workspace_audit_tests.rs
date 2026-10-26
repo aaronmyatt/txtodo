@@ -49,7 +49,9 @@ fn a_workspace_offer_carries_the_folder_name_and_never_a_path() {
     let (_base, root) = nested_workspace();
     let registry_dir = tempfile::tempdir().unwrap();
     let mut registry = WorkspaceRegistry::open(&registry_dir.path().join("registry.db")).unwrap();
-    registry.add(&root, &FakeClock::new(1_000)).unwrap();
+    // Only a list is offered (ADR 0043); this one is a folder named `default`, shown by that name.
+    let list = crate::list_workspace::ListName::parse("work").unwrap().id();
+    registry.adopt(list, &root, &FakeClock::new(1_000)).unwrap();
     let offers = outbound_offers(&Mutex::new(registry), &WorkspaceOfferRegistry::new());
     assert_eq!(offers.len(), 1);
     assert_eq!(offers[0].1, "default");

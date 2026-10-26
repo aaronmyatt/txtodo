@@ -126,7 +126,8 @@ pub async fn build_endpoint_with_secret_key(
 /// Test-only twin of [`build_endpoint`] that skips relay TLS certificate verification, so a test
 /// can dial `iroh::test_utils::run_relay_server`'s self-signed local relay. `#[cfg(test)]` compiles
 /// this out of every real build entirely — production code has no path to an insecure endpoint.
-#[cfg(test)]
+/// Only `holepunch`'s tests call it, so it is gated on `native` with them.
+#[cfg(all(test, feature = "native"))]
 pub(crate) async fn build_endpoint_insecure_for_test(
     cfg: &RelayConfig,
 ) -> Result<Endpoint, RelayError> {

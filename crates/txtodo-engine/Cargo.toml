@@ -1,0 +1,46 @@
+[package]
+name = "txtodo-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "The merge engine: a document's state from its ops, edits as ops, and identity across edits. Pure; the daemon and the web peer share it (ADR 0042)."
+
+[dependencies]
+txtodo-core.workspace = true
+txtodo-model.workspace = true
+# Only `op_set_hash` reads the store (a document's op-set digest, ADR 0035). The store also builds
+# for wasm32 (rusqlite links sqlite-wasm-rs there), so this keeps the engine browser-ready.
+txtodo-store.workspace = true
+tracing.workspace = true
+# https://docs.rs/blake3 — the projection hash (`hash_of`) and the op-set digest.
+blake3 = "1"
+# https://docs.rs/jiff — the device's local date for done/created stamps (ADR 0011).
+jiff = "0.2"
+# https://docs.rs/pathfinding — Kuhn-Munkres assignment of ids across an external edit.
+pathfinding = "4.16.0"
+# https://docs.rs/strsim — edit distance between a line's old and new text.
+strsim = "0.11.1"
+
+# In a browser, jiff reads the clock (`Date.now`) and the time zone (`Intl`) through js-sys;
+# without `js`, `Zoned::now()` in `local_date` panics there. The tz database comes bundled
+# (jiff's default `tzdb-bundle-platform`). Ref: https://docs.rs/jiff/0.2/jiff/#crate-features
+[target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dependencies]
+jiff = { version = "0.2", features = ["js"] }
+
+[features]
+# The test seams (`DocState::apply_kind`, `DocState::stamps`, `Parked::len`,
+# `fastid::hydration_op`) for another crate's tests: the daemon turns it on in its
+# dev-dependencies. Never on in a real build.
+# Ref: https://doc.rust-lang.org/cargo/reference/features.html
+test-support = []
+
+[dev-dependencies]
+# https://docs.rs/proptest — property tests of the text-edit and id helpers.
+proptest = "1"
+# https://docs.rs/serde_json — reads the captured chaos case in `testdata/`.
+serde_json = "1"
+
+[lints]
+workspace = true

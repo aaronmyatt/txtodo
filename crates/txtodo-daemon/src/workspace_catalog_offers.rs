@@ -1,13 +1,10 @@
-//! The catalog's offer/adoption half (tasks `daemon-workspace-identity-agreement`,
-//! `pairing-workspace-identity`): the pending-offer surface (mirrored on its own since task
-//! `remote-workspace-mirror`, see `workspace_catalog_mirror.rs`), and the id
-//! rekeying a joiner needs once pairing hands it the initiator's workspace id. Same `impl
+//! The catalog's offer half (task `daemon-workspace-identity-agreement`): the pending-offer surface
+//! (mirrored on its own since task `remote-workspace-mirror`, see `workspace_catalog_mirror.rs`).
+//! Pairing no longer re-keys a joiner's folder to the initiator's workspace id (task
+//! `two-kinds-of-workspace`): a list's id is its name's and a repo is not synced. Same `impl
 //! WorkspaceCatalog`, split from `workspace_catalog.rs` for its file budget.
 
-use crate::server::SharedWorkspace;
 use crate::workspace_catalog::WorkspaceCatalog;
-use std::path::Path;
-use std::sync::{Arc, PoisonError};
 use tonic::Status;
 use txtodo_model::DeviceId;
 use txtodo_store::WorkspaceId;
@@ -20,11 +17,11 @@ impl WorkspaceCatalog {
         self.open_args.identity.workspace_offers().list()
     }
 
-    /// `WorkspaceAcceptOffer` RPC: mirrors the pending offer's workspace now, the same way the
-    /// mirror task would on its own (task `remote-workspace-mirror`: always under
-    /// `<remote root>/<workspace-id>/`, never a directory the caller picks). Consumes the pending
-    /// offer whether mirroring succeeds or fails — a human who explicitly acted on an offer should
-    /// never see it silently reappear as still-pending.
+    /// `WorkspaceAcceptOffer` RPC: makes the pending offer's list now, the same way the mirror task
+    /// would on its own. Only a list can be accepted (ADR 0043): a repo is carried by git, and an
+    /// older build's default alias is no longer mirrored. Consumes the pending offer whether making
+    /// it succeeds or fails — a human who explicitly acted on an offer should never see it silently
+    /// reappear as still-pending.
     pub fn accept_offer(
         &self,
         offering_device: DeviceId,
@@ -35,127 +32,20 @@ impl WorkspaceCatalog {
             .identity
             .workspace_offers()
             .take(offering_device, workspace_id);
-        if offer.is_none() {
+        let Some(offer) = offer else {
             return Err(Status::not_found(format!(
                 "no pending offer for workspace {workspace_id} from device {offering_device}"
             )));
-        }
-        self.mirror_workspace(workspace_id)
-    }
-
-    /// The registry half of [`Self::adopt_offered_workspace_id`], split out for that function's
-    /// cognitive-complexity budget: releases `current_id`'s row for `root`, then adopts
-    /// `offered_id` for it — rolling back to `current_id` (logged, never silent) if `offered_id`
-    /// turns out to already name a different root on this device.
-    fn rekey_registry(
-        &self,
-        current_id: WorkspaceId,
-        offered_id: WorkspaceId,
-        root: &Path,
-    ) -> Result<(), Status> {
-        let mut registry = self.registry.lock().unwrap_or_else(PoisonError::into_inner);
-        registry
-            .remove(current_id, self.clock.as_ref())
-            .map_err(|e| {
-                Status::internal(format!(
-                    "release {current_id} before adopting {offered_id}: {e}"
-                ))
-            })?;
-        // `adopt_released`, not `adopt`: `root` is the folder just released, not a new one, so an
-        // overlap it had before the refusal existed must not fail pairing (sync-drift line 3).
-        if let Err(e) = registry.adopt_released(offered_id, root, self.clock.as_ref()) {
-            if let Err(rollback_err) =
-                registry.adopt_released(current_id, root, self.clock.as_ref())
-            {
-                tracing::error!(
-                    %current_id, %offered_id, error = %rollback_err,
-                    "workspace_id_rekey_rollback_failed"
-                );
-            }
-            return Err(Status::invalid_argument(format!(
-                "pairing offered workspace {offered_id}, which is already registered to a \
-                 different directory on this device: {e}"
-            )));
-        }
-        Ok(())
-    }
-
-    /// `PairAccept`'s own id adoption (task `pairing-workspace-identity`, distinct from
-    /// `accept_offer` above): the joiner's daemon already self-registered and opened `ws` under a
-    /// locally-minted id (`open_one`, run unconditionally at daemon startup for the `--dir` bridge,
-    /// long before any pairing RPC) — first-registrant-wins means the joiner must give that id up
-    /// in favor of the initiator's `offered_id` instead. A no-op returning `current_id` when the
-    /// two already match. Never touches `root/.txtodo/` — only the registry row's id, this
-    /// process's `open` map key, `ws`'s own live id, and the device-level relay/file-carrier route
-    /// tables change. Refuses (never silently substitutes) when `offered_id` is already
-    /// actively registered locally under a *different* root — the one collision `adopt` cannot
-    /// resolve by itself; the far more common case, `ws`'s own root being self-registered under
-    /// its old id, is exactly what this releases first. Also refuses a folder that is not empty
-    /// (sync-drift line 4, `join_target.rs`): its lines have ids of their own, so rekeying it
-    /// would merge them with the peer's copy of the same lines.
-    pub fn adopt_offered_workspace_id(
-        &self,
-        ws: &SharedWorkspace,
-        offered_id: WorkspaceId,
-    ) -> Result<WorkspaceId, Status> {
-        let (current_id, root) = {
-            let guard = ws.read().unwrap_or_else(PoisonError::into_inner);
-            (guard.workspace_id(), guard.root().to_path_buf())
         };
-        if current_id == offered_id {
-            return Ok(current_id);
+        if crate::list_workspace::is_list_id(workspace_id) {
+            return self.mirror_offered_list(&offer)?.ok_or_else(|| {
+                Status::failed_precondition("only your own devices can offer you a list")
+            });
         }
-        // The default keeps its reserved id (task default-workspace): pairing carries it like any
-        // other workspace, and an initiator's other workspace reaches this device through the
-        // ordinary offer, beside the default, never in place of it.
-        if self.registered_default() == Some(current_id) {
-            tracing::info!(offered = %offered_id, "pairing_kept_default_workspace_id");
-            return Ok(current_id);
-        }
-        // Checked before anything changes, so a refusal leaves the registry and the pairing
-        // handshake untouched (`pair_accept_with_catalog` only starts it after this returns).
-        crate::join_target::require_empty(
-            &root,
-            "cannot join the other device's workspace",
-            "Pair from your default workspace instead (the other device's workspaces then arrive \
-             on their own as Remote workspaces), or from an empty folder.",
-        )?;
-        self.rekey_registry(current_id, offered_id, &root)?;
-        {
-            let mut open = self.open.write().unwrap_or_else(PoisonError::into_inner);
-            if let Some(mut opened) = open.remove(&current_id) {
-                opened.rekey(offered_id);
-                open.insert(offered_id, opened);
-            }
-            self.slots.rekey(current_id, offered_id);
-        }
-        ws.read()
-            .unwrap_or_else(PoisonError::into_inner)
-            .set_workspace_id(offered_id);
-        for routes in [
-            self.open_args
-                .device_relay
-                .as_ref()
-                .map(Arc::as_ref)
-                .map(crate::device_relay::DeviceRelay::routes),
-            self.open_args
-                .device_file_carrier
-                .as_ref()
-                .map(Arc::as_ref)
-                .map(crate::file_carrier::DeviceFileCarrier::routes),
-            self.open_args
-                .device_lan
-                .as_ref()
-                .map(Arc::as_ref)
-                .map(crate::device_lan::DeviceLan::routes),
-        ]
-        .into_iter()
-        .flatten()
-        {
-            routes.unregister(current_id);
-            crate::workspace_catalog_open::register_route(ws, offered_id, Some(routes));
-        }
-        Ok(offered_id)
+        Err(Status::failed_precondition(
+            "only a list is offered between devices now; a repo's list travels with its git \
+             repository (`txtodo git setup`)",
+        ))
     }
 
     /// `WorkspaceDeclineOffer` RPC: discards a pending offer without adopting it. `false` when no

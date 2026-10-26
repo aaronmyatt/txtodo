@@ -28,8 +28,8 @@ fn open(root: &Path) -> Workspace {
         .unwrap_or_else(|e| panic!("open workspace: {e}"))
 }
 
-/// A Tagged workspace, as one minted before ADR 0019 or under `txtodod --identity-mode tagged`:
-/// a new one is never Tagged just because its files carry `id:` tags.
+/// An existing Tagged workspace: since ADR 0019 a new one always opens Sidecar, so the mode is
+/// given, as an old store would hold it.
 fn open_tagged(root: &Path) -> Workspace {
     Workspace::open_with_default_mode(root, Arc::new(FakeClock::new(1_000)), IdentityMode::Tagged)
         .unwrap_or_else(|e| panic!("open workspace: {e}"))
@@ -91,18 +91,19 @@ async fn a_second_run_finds_nothing_left_to_strip() {
     assert_eq!(report.stripped, 0);
 }
 
-/// tasks/cli-no-implicit-register (ADR 0019, Sidecar only): registering a folder never makes it
-/// Tagged, so nothing stamps `id:` into its lists. A repo whose backlog carries a few `id:` tags
-/// was made Tagged on 2026-10-11 and got one stamped into every line of every list.
+/// Task cli-no-implicit-register: a folder whose lists already carry a few `id:` tags (an old
+/// checkout) opens as Sidecar (ADR 0019), and opening it writes no `id:` into any line.
 #[tokio::test]
-async fn a_new_workspace_is_sidecar_and_writes_no_id_tag_into_any_list() {
+async fn opening_a_partly_tagged_folder_stamps_no_id() {
     let dir = tempfile::tempdir().unwrap();
-    let todo = format!("one id:{A}\ntwo\n");
-    touch(&dir.path().join("todo.txt"), &todo);
+    touch(&dir.path().join("todo.txt"), &format!("one id:{A}\ntwo\n"));
     touch(&dir.path().join("q4/todo.txt"), "three\nfour\n");
     let ws = open(dir.path());
     assert_eq!(ws.identity_mode(), IdentityMode::Sidecar);
     drop(ws);
-    assert_eq!(read(&dir.path().join("todo.txt")), todo);
+    assert_eq!(
+        read(&dir.path().join("todo.txt")),
+        format!("one id:{A}\ntwo\n")
+    );
     assert_eq!(read(&dir.path().join("q4/todo.txt")), "three\nfour\n");
 }

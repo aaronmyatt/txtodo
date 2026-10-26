@@ -44,7 +44,12 @@ pub struct Change {
     pub ops: Vec<Stored>,
     /// The file's duplicate groups afterwards (ADR 0032).
     pub duplicate_groups: u32,
+    /// Which client made every op of this change (`CommitTail::source`, task op-source), so a
+    /// Watch subscriber can tell its own edits from another client's (task change-notifications).
+    pub source: Option<String>,
 }
+
+pub use crate::conflict_row::FileConflicts;
 
 /// Everything the actor can fail with. Client errors (`Mutation`) map to gRPC InvalidArgument /
 /// FailedPrecondition; the rest are Internal.
@@ -191,7 +196,7 @@ pub enum ActorMsg {
         /// Result channel.
         reply: oneshot::Sender<Result<crate::migrate_sidecar::Migrated, ActorError>>,
     },
-    /// The file's duplicate groups (ADR 0032).
+    /// The document's duplicate lines (ADR 0032).
     Conflicts {
         /// Result channel.
         reply: oneshot::Sender<Result<Vec<crate::duplicates::DuplicateGroup>, ActorError>>,
@@ -324,8 +329,8 @@ impl ActorHandle {
             .await?
     }
 
-    /// The file's duplicate groups (ADR 0032), derived from the state now.
-    pub async fn conflicts(&self) -> Result<Vec<crate::duplicates::DuplicateGroup>, ActorError> {
+    /// The document's duplicate groups (ADR 0032).
+    pub async fn conflicts(&self) -> Result<FileConflicts, ActorError> {
         self.ask(|reply| ActorMsg::Conflicts { reply }).await?
     }
 

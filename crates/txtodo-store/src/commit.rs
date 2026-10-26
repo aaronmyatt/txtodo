@@ -32,9 +32,8 @@ pub struct CommitExtras {
     pub source: Option<String>,
 }
 
-/// Lands the fingerprints on `tx`; the caller owns the transaction. The todo.txt Loro mirror
-/// snapshot and the needs_review flag clear that used to land here are gone (ADR 0038); their old
-/// rows stay, unread. `notes.md`'s mirror still uses its table, through `put_mirror`.
+/// Lands the fingerprints on `tx`; the caller owns the
+/// transaction.
 fn land_extras(
     tx: &rusqlite::Connection,
     file: &FilePath,

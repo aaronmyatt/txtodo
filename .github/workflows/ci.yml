@@ -92,7 +92,7 @@ jobs:
       # old `--run-ignored ignored-only` step: apps/desktop's support::TXTODOD_BIN builds txtodod
       # with a nested cargo build under its own feature resolution (once ~14 minutes for 2 tests),
       # so this is still the slowest step. Other crates' #[ignore]s are deliberate and stay ignored
-      # (txtodo-sync upstream bugs, the crdt `just sim` sweep, daemon-launch's simulated_reboot).
+      # (txtodo-sync upstream bugs, daemon-launch's simulated_reboot).
       - name: test (e2e)
         if: runner.os != 'Windows'
         run: cargo nextest run --workspace --exclude txtodo-daemon --test e2e --no-fail-fast
@@ -146,6 +146,25 @@ jobs:
       - run: rustup target add thumbv7em-none-eabihf
       - uses: Swatinem/rust-cache@v2
       - run: cargo build -p txtodo-core --no-default-features --target thumbv7em-none-eabihf
+
+  wasm:
+    # The web peer's crates build for the browser (ADR 0042): the engine, the store (rusqlite links
+    # sqlite-wasm-rs there) and sync without its `native` feature. Their C parts (ring for iroh's
+    # TLS, SQLite) need a clang that targets wasm32; cc-rs reads CC_/AR_<target>.
+    # https://doc.rust-lang.org/rustc/platform-support/wasm32-unknown-unknown.html ·
+    # https://docs.rs/cc/latest/cc/#external-configuration-via-environment-variables
+    runs-on: ubuntu-latest
+    env:
+      CC_wasm32_unknown_unknown: clang
+      AR_wasm32_unknown_unknown: llvm-ar
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - run: rustup target add wasm32-unknown-unknown
+      - run: sudo apt-get update && sudo apt-get install -y clang llvm
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy -p txtodo-core -p txtodo-model -p txtodo-store -p txtodo-engine -p txtodo-web --target wasm32-unknown-unknown -- -D warnings
+      - run: cargo clippy -p txtodo-sync --no-default-features --target wasm32-unknown-unknown -- -D warnings
 
   bench:
     # perf budget (plan §5): parse 100k lines ≤ budgets.json.perf.parse100kMs on this runner

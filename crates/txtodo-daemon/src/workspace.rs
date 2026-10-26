@@ -282,6 +282,10 @@ impl Workspace {
     pub(crate) fn set_group_epoch(&self, new_epoch: u32) {
         self.identity.set_group_epoch(new_epoch);
     }
+    /// The device-wide identity this workspace borrows (ADR 0021): what a rotation acts on.
+    pub(crate) fn identity(&self) -> &Arc<DeviceIdentity> {
+        &self.identity
+    }
     /// This daemon's in-flight pairing bookkeeping (`pairing_grpc.rs`) — one attempt at a time,
     /// for the whole device, not per workspace (ADR 0021).
     pub(crate) fn pairing(&self) -> &PairingRegistry {

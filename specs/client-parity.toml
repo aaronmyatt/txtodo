@@ -26,6 +26,9 @@
 #   desktop   `{ status, surface }` for the desktop app, plus `keys` when its keys differ from
 #             the shared ones (then `status = "differs"`).
 #   tui       The same for the TUI.
+#   web       Optional: the browser build of the desktop app (`vite --mode web`, ADR 0042), only on
+#             rows where it stands apart from `desktop`; absent means "as desktop". Its reason goes
+#             in `deviation` too, after "In the browser:".
 #   deviation One plain line, required whenever either status is `differs` or `na`: what differs
 #             and why. Empty otherwise.
 #
@@ -87,7 +90,7 @@ id = "list.add_on_top"
 title = "Add a line from the row on top; it lands at the top of the list"
 keys = []
 scope = "list"
-desktop = { status = "done", surface = "PromptBar (the line lands at the top); FileView input above a sub-list" }
+desktop = { status = "done", surface = "PromptBar: the line lands at the top of the active list, the root or an open sub-list" }
 tui = { status = "done", surface = "Tasks, detail panel sub-list" }
 deviation = ""
 
@@ -154,6 +157,24 @@ desktop = { status = "done", surface = "FileView (list mode); or drag the line's
 tui = { status = "done", surface = "Tasks; or drag the row" }
 deviation = ""
 
+[[action]]
+id = "list.move_to"
+title = "Move the line to another list"
+keys = ["m"]
+scope = "list"
+desktop = { status = "done", surface = "FileView (list mode) opens the detail's Move to… picker" }
+tui = { status = "done", surface = "Tasks; m: the list picker (Move to)" }
+deviation = ""
+
+[[action]]
+id = "list.copy_to"
+title = "Copy the line to another list"
+keys = ["c"]
+scope = "list"
+desktop = { status = "done", surface = "FileView (list mode) opens the detail's Copy to… picker" }
+tui = { status = "done", surface = "Tasks; c: the list picker (Copy to)" }
+deviation = ""
+
 # ==== Editing a line ===============================================================================
 
 [[action]]
@@ -197,9 +218,9 @@ id = "list.click_to_edit"
 title = "Edit the selected line where you click it"
 keys = []
 scope = "list"
-desktop = { status = "differs", surface = "FileView" }
+desktop = { status = "done", surface = "FileView" }
 tui = { status = "done", surface = "Tasks, detail panel sub-list" }
-deviation = "Desktop's list is a text buffer, so any click puts a caret there; the TUI selects on the first click and edits on a click on the selected line."
+deviation = ""
 
 # ==== Readline keys in every text field (task tui-readline-keys) ===================================
 # Scope `edit` here means any TUI text field: the line editor, parent, notes, prompt bar, search,
@@ -523,7 +544,8 @@ keys = []
 scope = "global"
 desktop = { status = "na", surface = "" }
 tui = { status = "differs", surface = "command line (:q)", keys = ["Ctrl-c"] }
-deviation = "Desktop quits from the OS menu or tray; the TUI quits with :q or Ctrl-c (raw mode makes Ctrl-c a key)."
+web = { status = "na", surface = "" }
+deviation = "Desktop quits from the OS menu or tray; the TUI quits with :q or Ctrl-c (raw mode makes Ctrl-c a key). In the browser: closing the tab is the browser's."
 
 # ==== Revamp plan (tasks/desktop-ui-revamp/notes.md "Keyboard map", c2 footer hints) ===============
 # Neither client has these yet; the TUI builds them first (tasks/tui-revamp).
@@ -655,13 +677,49 @@ tui = { status = "done", surface = "W popup" }
 deviation = ""
 
 [[action]]
+id = "list_picker.down"
+title = "Next list in the picker"
+keys = ["j", "Down"]
+scope = "sheet"
+desktop = { status = "differs", surface = "the detail's Move to… / Copy to… select", keys = ["Down"] }
+tui = { status = "done", surface = "m/c list picker" }
+deviation = "The desktop's picker is a native select: its arrow keys, Enter and Esc are the OS's own."
+
+[[action]]
+id = "list_picker.up"
+title = "Previous list in the picker"
+keys = ["k", "Up"]
+scope = "sheet"
+desktop = { status = "differs", surface = "the detail's Move to… / Copy to… select", keys = ["Up"] }
+tui = { status = "done", surface = "m/c list picker" }
+deviation = "The desktop's picker is a native select: its arrow keys, Enter and Esc are the OS's own."
+
+[[action]]
+id = "list_picker.open"
+title = "Move or copy the line to the selected list"
+keys = ["Enter"]
+scope = "sheet"
+desktop = { status = "done", surface = "the detail's Move to… / Copy to… select" }
+tui = { status = "done", surface = "m/c list picker" }
+deviation = ""
+
+[[action]]
+id = "list_picker.close"
+title = "Close the list picker"
+keys = ["Esc"]
+scope = "sheet"
+desktop = { status = "done", surface = "the detail's Move to… / Copy to… select" }
+tui = { status = "done", surface = "m/c list picker" }
+deviation = ""
+
+[[action]]
 id = "prompt.focus"
 title = "Quick Add in the prompt bar"
-keys = ["Mod-Shift-Space"]
+keys = ["n", "Mod-Shift-Space"]
 scope = "global"
-desktop = { status = "differs", surface = "prompt bar (the global hotkey while the app is in front)", keys = ["Super-Shift-Space"] }
-tui = { status = "differs", surface = "prompt bar", keys = ["Ctrl-Space", "Ctrl-Shift-Space"] }
-deviation = "Terminals cannot see Cmd, and most send nothing for Ctrl-Shift-Space unless the kitty keyboard protocol is on: the TUI binds Ctrl-Space, and Ctrl-Shift-Space where it can tell them apart. The desktop's hotkey is Super-Shift-Space (Cmd on a Mac, the Windows key elsewhere): the same key as Quick Add, which opens the bar when the app is in front."
+desktop = { status = "differs", surface = "prompt bar (the global hotkey while the app is in front)", keys = ["n", "Super-Shift-Space"] }
+tui = { status = "differs", surface = "prompt bar", keys = ["n", "Ctrl-Space", "Ctrl-Shift-Space"] }
+deviation = "Both bind n, the one-key way in (2026-10-11). Terminals cannot see Cmd, and most send nothing for Ctrl-Shift-Space unless the kitty keyboard protocol is on: the TUI binds Ctrl-Space, and Ctrl-Shift-Space where it can tell them apart. The desktop's hotkey is Super-Shift-Space (Cmd on a Mac, the Windows key elsewhere): the same key as Quick Add, which opens the bar when the app is in front."
 
 [[action]]
 id = "prompt.submit"
@@ -986,7 +1044,8 @@ keys = ["Super-Shift-Space"]
 scope = "global"
 desktop = { status = "done", surface = "Quick Add window (quick_add.rs)" }
 tui = { status = "na", surface = "" }
-deviation = "An OS-wide hotkey and a floating window need a GUI app; the TUI's prompt bar (prompt.focus) covers adding from inside it."
+web = { status = "na", surface = "" }
+deviation = "An OS-wide hotkey and a floating window need a GUI app; the TUI's prompt bar (prompt.focus) covers adding from inside it. In the browser: no OS-wide hotkey or floating window; the prompt bar adds."
 
 [[action]]
 id = "prompt.chip"
@@ -1013,7 +1072,8 @@ keys = []
 scope = "global"
 desktop = { status = "done", surface = "tray" }
 tui = { status = "na", surface = "" }
-deviation = "A terminal program has no tray icon."
+web = { status = "na", surface = "" }
+deviation = "A terminal program has no tray icon. In the browser: no tray icon."
 
 [[action]]
 id = "tray.quick_add"
@@ -1022,7 +1082,8 @@ keys = []
 scope = "global"
 desktop = { status = "done", surface = "tray" }
 tui = { status = "na", surface = "" }
-deviation = "A terminal program has no tray icon."
+web = { status = "na", surface = "" }
+deviation = "A terminal program has no tray icon. In the browser: no tray icon."
 
 [[action]]
 id = "app.pin"
@@ -1031,7 +1092,8 @@ keys = []
 scope = "global"
 desktop = { status = "done", surface = "PinToggle" }
 tui = { status = "na", surface = "" }
-deviation = "A terminal program does not own its window; the terminal emulator does."
+web = { status = "na", surface = "" }
+deviation = "A terminal program does not own its window; the terminal emulator does. In the browser: the tab's window is not the page's to pin."
 
 [[action]]
 id = "app.theme"
@@ -1049,7 +1111,8 @@ keys = []
 scope = "global"
 desktop = { status = "done", surface = "status banner" }
 tui = { status = "done", surface = "daemon banner" }
-deviation = ""
+web = { status = "na", surface = "" }
+deviation = "In the browser: no daemon; the lists live in the tab's own Worker (ADR 0042)."
 
 [[action]]
 id = "app.dismiss_skill_hint"
@@ -1148,7 +1211,8 @@ keys = []
 scope = "settings"
 desktop = { status = "done", surface = "WorkspaceSwitcher" }
 tui = { status = "done", surface = "Settings > Workspaces" }
-deviation = ""
+web = { status = "na", surface = "" }
+deviation = "In the browser: one workspace and no folders (ADR 0042)."
 
 [[action]]
 id = "workspace.remove"
@@ -1157,7 +1221,18 @@ keys = []
 scope = "settings"
 desktop = { status = "done", surface = "WorkspaceSwitcher" }
 tui = { status = "done", surface = "Settings > Workspaces (d, twice)" }
-deviation = ""
+web = { status = "na", surface = "" }
+deviation = "In the browser: one workspace and no folders (ADR 0042)."
+
+[[action]]
+id = "workspace.new_list"
+title = "Make a named list that syncs between your own devices"
+keys = []
+scope = "settings"
+desktop = { status = "done", surface = "WorkspaceSwitcher (New list)" }
+tui = { status = "done", surface = "Settings > Workspaces (New list)" }
+web = { status = "na", surface = "" }
+deviation = "In the browser: the list arrives from a device that made it (ADR 0042 and 0043); a browser peer makes none."
 
 [[action]]
 id = "workspace.rename"
@@ -1166,7 +1241,8 @@ keys = []
 scope = "settings"
 desktop = { status = "done", surface = "WorkspaceSwitcher" }
 tui = { status = "differs", surface = "Settings > Workspaces (the open one)" }
-deviation = "The TUI renames only the open workspace, from a field row that starts at its name; switch to another first."
+web = { status = "na", surface = "" }
+deviation = "The TUI renames only the open workspace, from a field row that starts at its name; switch to another first. In the browser: one workspace and no folders (ADR 0042)."
 
 [[action]]
 id = "activity.refresh"
@@ -1175,7 +1251,8 @@ keys = []
 scope = "settings"
 desktop = { status = "done", surface = "Settings > Activity (ActivityCard)" }
 tui = { status = "done", surface = "Settings > Activity" }
-deviation = ""
+web = { status = "na", surface = "" }
+deviation = "In the browser: no device-wide op log yet."
 
 [[action]]
 id = "universal.filter_context"
@@ -1202,7 +1279,8 @@ keys = []
 scope = "settings"
 desktop = { status = "done", surface = "Devices" }
 tui = { status = "done", surface = "Settings > Devices" }
-deviation = ""
+web = { status = "planned", surface = "" }
+deviation = "In the browser: pairing waits for the web-pwa Sync line."
 
 [[action]]
 id = "pair.scan"
@@ -1211,7 +1289,8 @@ keys = []
 scope = "settings"
 desktop = { status = "done", surface = "Devices (camera)" }
 tui = { status = "differs", surface = "Settings > Devices" }
-deviation = "A terminal has no camera: the TUI takes the code pasted as text."
+web = { status = "planned", surface = "" }
+deviation = "A terminal has no camera: the TUI takes the code pasted as text. In the browser: pairing waits for the web-pwa Sync line."
 
 [[action]]
 id = "pair.confirm"
@@ -1220,7 +1299,8 @@ keys = []
 scope = "settings"
 desktop = { status = "done", surface = "Devices" }
 tui = { status = "done", surface = "Settings > Devices" }
-deviation = ""
+web = { status = "planned", surface = "" }
+deviation = "In the browser: pairing waits for the web-pwa Sync line."
 
 [[action]]
 id = "devices.list"
@@ -1229,7 +1309,8 @@ keys = []
 scope = "settings"
 desktop = { status = "done", surface = "Settings > Devices (DeviceList)" }
 tui = { status = "done", surface = "Settings > Devices" }
-deviation = ""
+web = { status = "planned", surface = "" }
+deviation = "In the browser: devices wait for the web-pwa Sync line."
 
 [[action]]
 id = "devices.revoke"
@@ -1238,7 +1319,8 @@ keys = []
 scope = "settings"
 desktop = { status = "done", surface = "Settings > Devices (Remove, behind a confirm)" }
 tui = { status = "done", surface = "Settings > Devices (d, twice)" }
-deviation = ""
+web = { status = "planned", surface = "" }
+deviation = "In the browser: devices wait for the web-pwa Sync line."
 
 [[action]]
 id = "tokens.create"
@@ -1247,7 +1329,8 @@ keys = []
 scope = "settings"
 desktop = { status = "done", surface = "Tokens" }
 tui = { status = "done", surface = "Settings > Tokens" }
-deviation = ""
+web = { status = "na", surface = "" }
+deviation = "In the browser: no daemon to issue agent tokens."
 
 [[action]]
 id = "tokens.copy"
@@ -1256,7 +1339,8 @@ keys = []
 scope = "settings"
 desktop = { status = "done", surface = "Tokens" }
 tui = { status = "differs", surface = "Settings > Tokens" }
-deviation = "The TUI copies with OSC 52, a terminal escape some terminals ignore; the secret stays on screen until dismissed."
+web = { status = "na", surface = "" }
+deviation = "The TUI copies with OSC 52, a terminal escape some terminals ignore; the secret stays on screen until dismissed. In the browser: no daemon to issue agent tokens."
 
 [[action]]
 id = "tokens.revoke"
@@ -1265,7 +1349,8 @@ keys = []
 scope = "settings"
 desktop = { status = "done", surface = "Tokens" }
 tui = { status = "done", surface = "Settings > Tokens (d, twice)" }
-deviation = ""
+web = { status = "na", surface = "" }
+deviation = "In the browser: no daemon to issue agent tokens."
 
 # ==== Revamp Settings rows that cannot exist in a terminal =========================================
 
@@ -1276,7 +1361,8 @@ keys = []
 scope = "settings"
 desktop = { status = "done", surface = "Settings > Workspaces (Choose a folder…)" }
 tui = { status = "na", surface = "" }
-deviation = "A terminal has no OS folder picker: the TUI adds a workspace by typed path (workspace.add)."
+web = { status = "na", surface = "" }
+deviation = "A terminal has no OS folder picker: the TUI adds a workspace by typed path (workspace.add). In the browser: no folders to pick (ADR 0042)."
 
 [[action]]
 id = "appearance.font"

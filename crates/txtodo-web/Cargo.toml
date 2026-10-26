@@ -1,0 +1,48 @@
+[package]
+name = "txtodo-web"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "The browser peer's host (ADR 0042): the engine and the store in a dedicated Web Worker, answering the desktop frontend's file commands."
+
+# cdylib: the wasm-bindgen build the Worker loads; rlib: the native build its tests run on.
+# Ref: https://doc.rust-lang.org/cargo/reference/cargo-targets.html#the-crate-type-field
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+txtodo-core.workspace = true
+txtodo-model.workspace = true
+txtodo-store.workspace = true
+txtodo-engine.workspace = true
+tracing.workspace = true
+# https://serde.rs — the desktop's command arguments and results cross as JSON.
+serde = { version = "1", features = ["derive"] }
+# https://docs.rs/serde_json — the Worker passes JSON text both ways.
+serde_json = "1"
+# https://docs.rs/getrandom — the 80 random bits of a ULID.
+getrandom = "0.3"
+
+# The browser-only half: wasm-bindgen exports, the clock, and SQLite's OPFS VFS.
+[target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dependencies]
+# https://docs.rs/getrandom/0.3.4/getrandom/#webassembly-support — crypto.getRandomValues.
+getrandom = { version = "0.3", features = ["wasm_js"] }
+# https://docs.rs/wasm-bindgen — must match the wasm-bindgen CLI (0.2.128), as txtodo-ffi's does.
+wasm-bindgen = "0.2.128"
+# https://docs.rs/wasm-bindgen-futures — `WebHost::open` is a JS Promise.
+wasm-bindgen-futures = "0.4"
+# https://docs.rs/js-sys — Date.now() (std's clock is not there on this target).
+js-sys = "0.3.105"
+# https://docs.rs/sqlite-wasm-rs — the SQLite rusqlite links on this target; its WasmOsCallback.
+sqlite-wasm-rs = "0.5"
+# https://docs.rs/sqlite-wasm-vfs — the OPFS SyncAccessHandle pool VFS (dedicated Worker only).
+sqlite-wasm-vfs = "0.2"
+
+[dev-dependencies]
+# https://docs.rs/tempfile — each native test gets its own database file.
+tempfile = "3"
+
+[lints]
+workspace = true

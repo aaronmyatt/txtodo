@@ -1,10 +1,9 @@
-//! The actor's sync-facing messages (plan M4): the duplicate groups, the digest, a peer's ops.
-//! Same `impl FileActor`; split from `actor.rs` for the file budget. Same-word review (the
-//! `needs_review` flags and their resolve) went with the Loro import path (ADR 0038).
+//! The actor's sync-facing messages (plan M4): the document's duplicate lines, the digest, a peer's
+//! ops. Same `impl FileActor`; split from `actor.rs` for the file budget. The needs_review flags
+//! and their resolve went with the Loro mirror (ADR 0038, conflict review A).
 
 use crate::actor::FileActor;
-use crate::duplicates::DuplicateGroup;
-use crate::handle::{ActorError, ActorMsg};
+use crate::handle::{ActorError, ActorMsg, FileConflicts};
 
 impl FileActor {
     /// The sync/conflict-resolution messages — split out of `actor.rs::handle_core` purely to
@@ -52,8 +51,10 @@ impl FileActor {
             })
     }
 
-    /// The file's duplicate groups (ADR 0032), derived from the state now.
-    pub(crate) fn on_conflicts(&self) -> Result<Vec<DuplicateGroup>, ActorError> {
-        Ok(crate::duplicates::duplicate_groups(&self.state))
+    /// The document's duplicate groups (ADR 0032), derived from the state right now.
+    pub(crate) fn on_conflicts(&self) -> Result<FileConflicts, ActorError> {
+        Ok(FileConflicts {
+            duplicates: crate::duplicates::duplicate_groups(&self.state),
+        })
     }
 }

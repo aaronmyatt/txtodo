@@ -25,6 +25,7 @@ mod daemon_mode;
 mod dir_scope;
 mod error;
 mod json;
+mod logo;
 #[cfg(test)]
 mod plan_audit;
 mod plan_check;
@@ -65,11 +66,21 @@ fn main() -> ExitCode {
 }
 
 fn run(cli: &Cli) -> Result<(), CliError> {
+    // About this binary or a clone given by hand, not a workspace: before any path or config.
+    if let Some(done) = commands::early::run(cli) {
+        return done;
+    }
     let env = Env::from_process().map_err(CliError::Io)?;
     let config_file = config::config_path(&env);
     let config = Config::load(&config_file).map_err(CliError::Config)?;
-    let paths = resolve_paths(cli, &env, &config, config_file)?;
-    let mut ctx = Ctx {
+    // `--list NAME` is `--dir <that list's folder>`, asked of the daemon (task
+    // two-kinds-of-workspace).
+    let list_dir = (cli.list.as_deref())
+        .map(|name| commands::lists::dir_of(&env, name, cli.no_daemon))
+        .transpose()?;
+    let paths =
+        config_root_list::resolve_paths(cli, list_dir.as_deref(), &env, &config, config_file)?;
+    let ctx = Ctx {
         ids: config.id_tags() && !cli.no_id,
         auto_archive: !cli.no_archive,
         today: clock::today_local(),
@@ -89,6 +100,7 @@ fn run(cli: &Cli) -> Result<(), CliError> {
             return commands::mcp::run(&ctx, *stdio, *http, token.as_deref());
         }
         Command::Skill { action } => return commands::skill::run(action),
+        Command::Notices { action } => return commands::notices::run(&env, *action),
         // A path, not a daemon question: answered even when no daemon is running.
         Command::Workspace {
             action: Some(commands::workspace::Action::Default),
@@ -105,61 +117,35 @@ fn run(cli: &Cli) -> Result<(), CliError> {
             daemon_ensure::ensure_daemon_then_dispatch(&ctx, &cli.command, &env)
         }
         client::Mode::Direct => dispatch(&ctx, &cli.command),
-        client::Mode::Daemon(mut daemon) => {
-            // `--dir` inside a registered workspace runs on it, scoped like `sub`.
-            if let Some(done) = dir_scope::scoped(
-                &cli.command,
-                cli.list.is_some(),
-                &mut daemon,
-                &ctx.paths.dir,
-            )? {
-                return done;
-            }
-            // A read in an unregistered folder fails before anything names it by path.
-            if register_guard::check(&cli.command, &ctx.paths, &mut daemon)?
-                == register_guard::Guard::Direct
-            {
-                return dispatch(&ctx, &cli.command);
-            }
-            // `workspace …` is about the registry, not a document: asking the layout here would
-            // make the daemon open and register the resolved `--dir`/cwd as a side effect
-            // (`workspace list` from any folder registered it; `accept --dir x` tried to
-            // register `x`, which the global `--dir` also received).
-            // A `--list` (from `sub`) already names the document; the layout only knows the root.
-            if !matches!(cli.command, Command::Workspace { .. }) && cli.list.is_none() {
-                commands::layout::adopt_root_list(&mut ctx.paths, &mut daemon)?;
-            }
-            dispatch_daemon(&ctx, &mut daemon, &cli.command)
-        }
+        client::Mode::Daemon(daemon) => run_with_daemon(ctx, cli, daemon),
     }
 }
 
-/// Every path this run uses: `config::resolve`'s, then a `--list` (what `sub` passes) in place of
-/// the root list, inside the same workspace.
-fn resolve_paths(
+/// Daemon mode, past the checks that need only the paths: scope or refuse the folder, adopt the
+/// workspace's layout, then dispatch.
+fn run_with_daemon(
+    mut ctx: Ctx,
     cli: &Cli,
-    env: &Env,
-    config: &Config,
-    config_file: std::path::PathBuf,
-) -> Result<Paths, CliError> {
-    let mut paths = config::resolve(
-        env,
-        config::ResolveFlags {
-            dir: cli.dir.as_deref(),
-            sync_dir: cli.sync_dir.as_deref(),
-            relay: cli.relay.as_deref(),
-        },
-        config,
-        config_file,
-    );
-    if let Some(list) = cli.list.as_deref() {
-        config_root_list::scope_to_list(&mut paths, list)?;
+    mut daemon: Box<client::Daemon>,
+) -> Result<(), CliError> {
+    // Before any request names this folder: a read-only command never registers it.
+    if let Some(scoped) = register_guard::check(
+        &mut daemon,
+        &ctx.paths.dir,
+        &cli.command,
+        cli.sublist.is_some(),
+    )? {
+        return register_guard::rerun_scoped(&scoped);
     }
-    debug_assert!(
-        paths.todo.ends_with(&paths.todo_file),
-        "resolve names the todo file"
-    );
-    Ok(paths)
+    // `workspace …` and `lists …` are about the registry, not a document: asking the layout here
+    // would make the daemon open and register the resolved `--dir`/cwd as a side effect
+    // (`workspace list` from any folder registered it; `accept --dir x` tried to register `x`,
+    // which the global `--dir` also received). A `--sublist` (from `sub`) already names the
+    // document; the layout only knows the root.
+    if !cli.command.is_registry() && cli.sublist.is_none() {
+        commands::layout::adopt_root_list(&mut ctx.paths, &mut daemon)?;
+    }
+    dispatch_daemon(&ctx, &mut daemon, &cli.command)
 }
 
 /// Says which workspace a command is about to use when it fell back to the default one (task
@@ -168,12 +154,13 @@ fn resolve_paths(
 /// machine where no daemon has run yet. Commands about the daemon or workspaces themselves skip it.
 fn announce_default_workspace(ctx: &Ctx, command: &Command) {
     if !ctx.paths.default_workspace
+        || command.is_registry()
         || matches!(
             command,
             Command::Doctor { .. }
                 | Command::Daemon { .. }
                 | Command::Skill { .. }
-                | Command::Workspace { .. }
+                | Command::Notices { .. }
         )
     {
         return;
@@ -192,12 +179,10 @@ fn announce_default_workspace(ctx: &Ctx, command: &Command) {
 }
 
 /// The CLI's own sink matrix (root todo.txt `logging-cli`), distinct from `txtodo-mcp`/`txtodod`'s
-/// always-on JSON+stderr pair (`txtodo_telemetry::init` unconditionally builds both): most
-/// invocations are one-shot and short-lived, so writing a rolling JSON log file nobody asked for on
-/// every `txtodo add` would be noise. Default (no `$TXTODO_LOG`): pretty stderr only, `warn`+, so
-/// an ordinary run stays quiet but still surfaces the three converted `commands/edit.rs`
-/// diagnostics. `$TXTODO_LOG` set: the shared JSON-rolling-file + pretty-stderr pair, filtered by
-/// its value, same as every other txtodo binary.
+/// always-on JSON+stderr pair: most invocations are one-shot, so a rolling JSON log nobody asked
+/// for on every `txtodo add` would be noise. Default (no `$TXTODO_LOG`): pretty stderr only,
+/// `warn`+, which still surfaces the three converted `commands/edit.rs` diagnostics.
+/// `$TXTODO_LOG` set: the shared JSON-rolling-file + pretty-stderr pair, filtered by its value.
 ///
 /// Reads `$TXTODO_LOG` directly rather than through `config::Env` (`config.rs`'s module doc: "the
 /// process environment ... never read below main"): this is telemetry bootstrap, not CLI business
@@ -237,6 +222,7 @@ fn command_name(command: &Command) -> &'static str {
         Command::Listcon { .. } => "listcon",
         Command::Prepend { .. } => "prepend",
         Command::Move { .. } => "move",
+        Command::Copy { .. } => "copy",
         Command::Pri { .. } => "pri",
         Command::Report => "report",
         Command::Replace { .. } => "replace",
@@ -257,7 +243,13 @@ fn command_name(command: &Command) -> &'static str {
         Command::Sub { .. } => "sub",
         Command::Bundle { .. } => "bundle",
         Command::Workspace { .. } => "workspace",
+        Command::Lists { .. } => "lists",
+        Command::Repos { .. } => "repos",
         Command::Skill { .. } => "skill",
+        Command::Upgrade { .. } => "upgrade",
+        Command::MergeDriver { .. } => "merge-driver",
+        Command::Git { .. } => "git",
+        Command::Notices { .. } => "notices",
         Command::Prune { .. } => "prune",
     }
 }
@@ -311,7 +303,15 @@ fn dispatch_daemon_inner(
         Command::Workspace { action } => {
             commands::workspace::run(ctx, daemon, action.as_ref(), ctx.json)
         }
+        Command::Lists { action } => commands::lists::run(daemon, action.as_ref(), ctx.json),
+        Command::Repos { action } => commands::repos::run(daemon, action.as_ref(), ctx.json),
         Command::Bundle { action } => bundle::run(daemon, action),
+        Command::Move { item, dest, src } => {
+            commands::move_copy::move_via_daemon(ctx, daemon, item, dest, src.as_deref())
+        }
+        Command::Copy { item, dest, src } => {
+            commands::move_copy::copy_via_daemon(ctx, daemon, item, dest, src.as_deref())
+        }
         // Every todo.sh command, present and future, goes through the scratch adapter by design.
         todo_sh => daemon_mode::run_via_daemon(ctx, daemon, |scratch| dispatch(scratch, todo_sh)),
     }
@@ -334,7 +334,11 @@ fn dispatch_inner(ctx: &Ctx, command: &Command) -> Result<(), CliError> {
         Command::Doctor { .. }
         | Command::Daemon { .. }
         | Command::Mcp { .. }
-        | Command::Skill { .. } => unreachable!("handled before mode selection"),
+        | Command::Skill { .. }
+        | Command::Upgrade { .. }
+        | Command::MergeDriver { .. }
+        | Command::Git { .. }
+        | Command::Notices { .. } => unreachable!("handled before mode selection"),
         c if daemon_ensure::needs_daemon(c) => Err(needs_daemon_err()),
         Command::Add { text } => commands::add::run(ctx, &text.join(" "), false),
         Command::Addm { text } => commands::add::run(ctx, &text.join(" "), true),
@@ -353,6 +357,9 @@ fn dispatch_inner(ctx: &Ctx, command: &Command) -> Result<(), CliError> {
         Command::Move { item, dest, src } => {
             commands::fileops::run_move(ctx, item, dest, src.as_deref())
         }
+        Command::Copy { item, dest, src } => {
+            commands::move_copy::run_copy(ctx, item, dest, src.as_deref())
+        }
         Command::Report => commands::fileops::run_report(ctx, &clock::now_local_iso()),
         Command::Del { item, term } => commands::edit::run_del(ctx, item, term.as_deref()),
         Command::Do { items } => commands::edit::run_do(ctx, items),
@@ -363,7 +370,7 @@ fn dispatch_inner(ctx: &Ctx, command: &Command) -> Result<(), CliError> {
         }
         Command::Fmt => commands::hygiene::run_fmt(ctx),
         Command::Lint => commands::hygiene::run_lint(ctx),
-        Command::List { terms } => commands::list::list_file(ctx, &ctx.paths.todo, terms),
+        Command::List { terms } => commands::list::list_open(ctx, terms),
         Command::Listall { terms } => commands::list::list_all(ctx, terms),
         Command::Listpri { args } => commands::list::list_pri(ctx, args),
         Command::Listproj { terms } => commands::list::list_words(ctx, '+', terms),

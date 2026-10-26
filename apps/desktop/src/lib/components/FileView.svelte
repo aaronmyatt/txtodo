@@ -14,8 +14,9 @@
 	import { dragLines, startLineDrag } from "$lib/todotxt/dragLines";
 	import { newestChange, popChange, popIfNewest } from "$lib/stores/changes";
 	import { showToast } from "$lib/stores/toast";
-	import { onListCommand } from "$lib/listCommands";
-	import { docLines, listMutations, moveTarget } from "$lib/todotxt/listMode";
+	import { listBuffer } from "$lib/listCommands";
+	import { clickOnlySelects, docLines, listMutations, moveTarget } from "$lib/todotxt/listMode";
+	import { movePicker } from "$lib/stores/movePicker";
 	import { applyChipCore } from "$lib/wasmCore";
 	import { localToday } from "./editPopoverLogic";
 	import { leaveEditor } from "$lib/escape";
@@ -51,7 +52,6 @@
 	} from "$lib/todotxt/decorations";
 	import { hoverLine, setHoverLine } from "$lib/todotxt/hoverLine";
 	import { isReorderOnly, saveBuffer, type Baseline, type SaveOutcome } from "$lib/todotxt/saveBuffer";
-	import { addOnTopMutations } from "$lib/todotxt/addOnTop";
 	import { rejectedEdits } from "$lib/stores/rejectedEdits";
 	import { currentWorkspaceRoot } from "$lib/stores/workspaces";
 	import type { DetailParams } from "$lib/types";
@@ -83,8 +83,6 @@
 		/** This is the main buffer: report its save state and caret to the status footer
 		 * (`$lib/stores/editorStatus`). Only MainView's root view sets it. */
 		reportStatus?: boolean;
-		/** List mode's commands act on this buffer (`$lib/listCommands.ts`): MainView's root view. */
-		listCommands?: boolean;
 	}
 
 	let {
@@ -93,8 +91,7 @@
 		fill = false,
 		onDirtyChange,
 		onDetailRequest,
-		reportStatus = false,
-		listCommands = false
+		reportStatus = false
 	}: Props = $props();
 
 	let savedTimer: ReturnType<typeof setTimeout> | undefined;
@@ -111,6 +108,10 @@
 	}
 
 	let containerEl: HTMLDivElement | undefined = $state();
+	let rootEl: HTMLDivElement | undefined = $state();
+	// Whether list mode's keys act on this list (`$lib/listCommands.ts`); only that list shows its
+	// current line, so with a detail open the eye can tell which one the keys move.
+	let activeList = $state(false);
 	let view: EditorView | undefined;
 	let filesByPath = $state<Map<string, FileInfo>>(new Map());
 	let loadError = $state("");
@@ -140,12 +141,8 @@
 	// and its unmount save runs after the bridge has moved on to the new workspace: the save names
 	// this root so the bridge can refuse it, and a refusal is parked under it (finding 4).
 	let baselineWorkspace = "";
-	// The daemon's task id per line of `baseline` (`FileContents.task_ids`), for the top input's move.
+	// The daemon's task id per line of `baseline` (`FileContents.task_ids`), for list mode's moves.
 	let baselineTaskIds: string[] = [];
-	// The "Add a line…" input above a sub-list (root todo line on it; TUI `list.add_on_top`); the
-	// root list adds through the prompt bar instead.
-	let newLine = $state("");
-	let adding = $state(false);
 	// A pending "the human only moved a line" save (task desktop-reorder-propagates): a reorder
 	// reaches the file at once, typed text still waits for blur or Cmd-S.
 	const REORDER_SAVE_DELAY_MS = 300;
@@ -225,6 +222,7 @@
 				mouseleave: (_event, editorView) => {
 					clearHover(editorView);
 				},
+				mousedown: handleMouseDown,
 				dblclick: handleDblClick,
 				// Blur commits (same rule tasks/desktop-raw-mode's notes.md stated: "on blur or
 				// Cmd/Ctrl+S the buffer goes through the reconciler"). CM6's `blur` domEventHandler
@@ -263,6 +261,23 @@
 		if (!onDetailRequest) return false;
 		const line = editorView.state.doc.lineAt(editorView.state.selection.main.head);
 		requestDetail(line.number);
+		return true;
+	}
+
+	// list.click_to_edit (`clickOnlySelects`): a click on another line while the list is not
+	// focused only moves the current line there. `preventDefault` keeps the focus where it is, and
+	// a focused button lets go, so the next `j` moves instead of typing. Returning true skips
+	// CodeMirror's own mousedown. https://codemirror.net/docs/ref/#view.EditorView^domEventHandlers
+	function handleMouseDown(event: MouseEvent, editorView: EditorView): boolean {
+		const pos = editorView.posAtCoords({ x: event.clientX, y: event.clientY });
+		if (pos == null) return false;
+		const clicked = editorView.state.doc.lineAt(pos).number;
+		const current = editorView.state.doc.lineAt(editorView.state.selection.main.head).number;
+		if (!clickOnlySelects(event, editorView.hasFocus, clicked, current)) return false;
+		event.preventDefault();
+		const held = document.activeElement;
+		if (held instanceof HTMLElement && held !== document.body) held.blur();
+		placeCursor(clicked);
 		return true;
 	}
 
@@ -427,27 +442,6 @@
 		}
 	}
 
-	/** The top input's Enter: an unsaved buffer goes first (its line numbers must be the daemon's),
-	 * then the new line as `add` + `move_before` the first task (`$lib/todotxt/addOnTop.ts`). The
-	 * daemon's `Change` repaints the list. A refusal shows on `commitError`; the text stays. */
-	async function addOnTop(e: SubmitEvent) {
-		e.preventDefault();
-		const line = newLine.trim();
-		if (!line || adding) return;
-		adding = true;
-		try {
-			if (dirty) await commit();
-			if (dirty) return; // the buffer was refused: its error is already showing
-			await applyMutations(path, addOnTopMutations(baseline, baselineTaskIds, line), baselineWorkspace);
-			newLine = "";
-			commitError = "";
-		} catch (err) {
-			commitError = String(err);
-		} finally {
-			adding = false;
-		}
-	}
-
 	let unlistenChange: (() => void) | undefined;
 
 	// List mode (specs/client-parity.toml list.*; `$lib/todotxt/listMode.ts`): while nothing has
@@ -475,6 +469,10 @@
 			return view.focus();
 		}
 		if (id === "detail.open") return requestDetail(current.number);
+		if (id === "list.move_to" || id === "list.copy_to") {
+			movePicker.set(id === "list.move_to" ? "move" : "copy");
+			return requestDetail(current.number);
+		}
 		if (id === "list.undo") return undoNewest();
 		if (dirty) await commit();
 		if (dirty) return; // the buffer was refused: its error is already showing
@@ -526,21 +524,29 @@
 	onMount(() => {
 		// One command at a time: a key pressed while the last one is still landing waits for it,
 		// so it acts on the list as it now is (a fast `J` then `x` used to hit the old line).
+		// Every list takes list mode's keys while it is the active one (`$lib/listCommands.ts`): from
+		// its mount (a sub-list mounts as its detail opens), and again on a click or focus inside it.
 		let listQueue = Promise.resolve();
-		const offList = listCommands
-			? onListCommand((id) => {
-					listQueue = listQueue.then(() => runListCommand(id)).catch(() => {});
-				})
-			: undefined;
+		const list = listBuffer(
+			(id) => {
+				listQueue = listQueue.then(() => runListCommand(id)).catch(() => {});
+			},
+			(active) => (activeList = active),
+			() => path
+		);
+		// Capture phase, so the editor's own handlers cannot stop it first.
+		// Ref: https://developer.mozilla.org/en-US/docs/Web/API/EventTarget/addEventListener#capture
+		rootEl?.addEventListener("pointerdown", list.activate, true);
+		rootEl?.addEventListener("focusin", list.activate, true);
 		view = new EditorView({ state: EditorState.create({ doc: "", extensions: initialExtensions() }), parent: containerEl });
 		lastStep = get(searchStep).n;
-		// Matching runs in the wasm core: once it has loaded, apply whatever is already typed.
-		if (reportStatus) {
-			void wasmReady().then(() => {
-				view?.dispatch({ effects: setQuery.of(get(searchQuery)) });
-				countHitsSoon();
-			});
-		}
+		// Matching runs in the wasm core: once it has loaded, apply whatever is already typed. Every
+		// list marks the header search's hits (a detail's sub-list too); only the main buffer counts
+		// them for the pill (task desktop-list-parity).
+		void wasmReady().then(() => {
+			view?.dispatch({ effects: setQuery.of(get(searchQuery)) });
+			countHitsSoon();
+		});
 
 		let cancelled = false;
 		(async () => {
@@ -556,7 +562,7 @@
 
 		return () => {
 			cancelled = true;
-			offList?.();
+			list.release();
 		};
 	});
 
@@ -591,7 +597,7 @@
 	}
 	$effect(() => {
 		const query = $searchQuery;
-		if (!reportStatus || !view) return;
+		if (!view) return;
 		view.dispatch({ effects: setQuery.of(query) });
 		countHitsSoon();
 	});
@@ -614,6 +620,7 @@
 			]
 		});
 	});
+
 
 	// A future detail view can swap `path` on a mounted FileView (e.g. selecting a different
 	// sub-list) — re-baseline against the new file rather than assuming `path` is fixed for life.
@@ -656,29 +663,12 @@
 	});
 </script>
 
-<div class="file-view" class:fill style={`--depth: ${depth};`} data-line-count={docLineCount}>
+<div class="file-view" class:fill class:active-list={activeList} bind:this={rootEl} style={`--depth: ${depth};`} data-line-count={docLineCount}>
 	{#if loadError}
 		<p class="error" role="alert">{loadError}</p>
 	{/if}
 	{#if commitError}
 		<p class="error" role="alert">{commitError}</p>
-	{/if}
-
-	<!-- Sub-lists only: the root list adds through the prompt bar at the foot of the window, which
-	     puts the line at the top the same way (2026-10-06 feedback). A sub-list has no other add. -->
-	{#if depth > 0}
-		<form class="add-line" onsubmit={addOnTop}>
-			<input
-				type="text"
-				aria-label="Add a line"
-				placeholder="Add a line…"
-				bind:value={newLine}
-				disabled={adding}
-				onkeydown={(e) => {
-					if (e.key === "Escape") newLine = "";
-				}}
-			/>
-		</form>
 	{/if}
 
 	<div class="editor-shell" bind:this={containerEl}></div>
@@ -696,21 +686,6 @@
 		flex: 1;
 		min-height: 0;
 		height: 100%;
-	}
-
-	/* Same field look as DetailView's "Add a sub-task" input. */
-	.add-line {
-		margin: 0.5rem 1rem 0.4rem;
-	}
-
-	.add-line input {
-		box-sizing: border-box; /* padding and border inside the 100%, or it runs off the right edge */
-		width: 100%;
-		font: inherit;
-		padding: 0.4rem 0.6rem;
-		border: 1px solid var(--color-border);
-		border-radius: 6px;
-		background: var(--color-surface);
 	}
 
 	.error {
@@ -737,6 +712,12 @@
 		border-radius: 0;
 		max-height: none;
 		height: 100%;
+	}
+
+	/* Only the list that has list mode's keys marks its current line. */
+	.file-view:not(.active-list) .editor-shell :global(.cm-activeLine),
+	.file-view:not(.active-list) .editor-shell :global(.cm-activeLineGutter) {
+		background: transparent;
 	}
 
 	.file-view.fill .editor-shell :global(.cm-editor) {

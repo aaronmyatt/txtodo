@@ -1,6 +1,7 @@
-//! The registry RPCs `GlobalService` delegates to (`WorkspaceAdd`/`Remove`/`List`, ADR 0025, and
-//! `WorkspaceRejoin`, task sync-drift line 8), split out of `global_service.rs` for its line
-//! budget, the same pattern as `workspace_offer_grpc.rs`. Device-level: none carries a selector.
+//! The registry RPCs `GlobalService` delegates to (`WorkspaceAdd`/`Remove`/`List`, ADR 0025;
+//! `WorkspaceRejoin`, task sync-drift line 8; `WorkspaceBind`), split out of `global_service.rs`
+//! for its line budget, the same pattern as `workspace_offer_grpc.rs`. Device-level: none carries
+//! a selector.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -56,5 +57,30 @@ pub(crate) async fn rejoin(
         backup_dir: done.backup.display().to_string(),
         moved: done.moved,
         offering_devices: done.offering.iter().map(ToString::to_string).collect(),
+    }))
+}
+
+/// `WorkspaceBind` (task spike-txtodo-should-merge-remote-workspa). On the blocking pool, like a
+/// rejoin: it closes two workspaces, moves files and reopens one.
+pub(crate) async fn bind(
+    service: &GlobalService,
+    r: Request<pb::WorkspaceBindRequest>,
+) -> Result<Response<pb::WorkspaceBindResponse>, Status> {
+    let req = r.into_inner();
+    let id = parse_workspace_id(&req.workspace_id)?;
+    let catalog = Arc::clone(service.catalog());
+    let root = std::path::PathBuf::from(req.root);
+    let done = tokio::task::spawn_blocking(move || catalog.bind(id, &root, req.dry_run))
+        .await
+        .map_err(|e| Status::internal(format!("bind task failed: {e}")))??;
+    Ok(Response::new(pb::WorkspaceBindResponse {
+        workspace: Some(workspace_info(service.catalog(), done.entry)),
+        backup_dir: done
+            .backup
+            .map(|b| b.display().to_string())
+            .unwrap_or_default(),
+        moved_aside: done.moved_aside,
+        moved_in: done.moved_in,
+        replaced_workspace_id: done.replaced.map(|id| id.to_string()).unwrap_or_default(),
     }))
 }

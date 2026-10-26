@@ -75,22 +75,23 @@ fn edit_in_editor(current: &[u8]) -> Result<String, CliError> {
 
 /// `sub ITEM# COMMAND...`: re-execs this same binary on the line's `ref:` sub-list (rule 12) — a
 /// scoped `todo.sh -d <ref>/todo.cfg`. The child keeps this workspace's `--dir` and names the
-/// sub-list with the hidden `--list`: every `todo.txt` under the root is one of its lists (rule
+/// sub-list with the hidden `--sublist`: every `todo.txt` under the root is one of its lists (rule
 /// 11). It used to get `--dir <ref dir>`, which made the daemon register the ref dir as a
 /// workspace of its own, and two stores then tracked one file (sync-drift line 3). Requires an
 /// existing `ref:` tag (typed error otherwise); a dangling one (rule 9) is healed first, same as
 /// the first sub-list write would, since the tag already exists and `ensure` can mint no new one.
 pub fn run_sub(ctx: &Ctx, daemon: &mut Daemon, item: &str, cmd: &[String]) -> Result<(), CliError> {
+    // A number is a root line; anything else a slug path (`trip`, `trip/flights`).
     let list = if item.parse::<u32>().is_ok() {
         list_of_line(ctx, daemon, item)?
     } else {
-        crate::commands::refdir_slug::list_of_slug(daemon, item)?
+        crate::commands::sub_slug::resolve(daemon, &ctx.paths.todo_file, item)?
     };
     let exe = std::env::current_exe().map_err(CliError::Io)?;
     let status = std::process::Command::new(exe)
         .arg("--dir")
         .arg(&ctx.paths.dir)
-        .arg("--list")
+        .arg("--sublist")
         .arg(&list)
         .args(cmd)
         .status()
@@ -103,7 +104,7 @@ pub fn run_sub(ctx: &Ctx, daemon: &mut Daemon, item: &str, cmd: &[String]) -> Re
     }
 }
 
-/// The sub-list of root line `item`: its `ref:` directory's `todo.txt`.
+/// The sub-list of root line `item`, claiming the ref dir (one op batch) when the tag is there.
 fn list_of_line(ctx: &Ctx, daemon: &mut Daemon, item: &str) -> Result<String, CliError> {
     let task = task_ref(item, "sub ITEM# COMMAND...")?;
     let probe = daemon.ref_dir(&ctx.paths.todo_file, task.clone(), false)?;

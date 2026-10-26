@@ -45,23 +45,19 @@ use tokio::task::JoinHandle;
 use txtodo_model::DeviceId;
 use txtodo_store::WorkspaceId;
 use txtodo_sync::{
-    DevicePublicKey, FileCarrier, Frame, GroupId, GroupKey, GroupKeys, Heads, Link, Message,
-    SealFor, advance, derive_group_op_signing_key, open as aead_open, peek_workspace,
-    seal as aead_seal, verify_batch, want,
+    FileCarrier, Frame, GroupId, GroupKeys, Heads, Link, Message, SealFor, advance,
+    open as aead_open, peek_workspace, seal as aead_seal, sealed_epoch, verify_batch, want,
 };
 
 use crate::device_relay::{WorkspaceRoute, WorkspaceRoutes};
+use crate::group_epoch::{EpochKey, verify_key};
 use crate::lan_apply::{commit_incoming_ops, device_keys_for, serve_want};
-use crate::lan_session::{fetch_group_key, read_heads, single_epoch_keys};
+use crate::lan_session::{fetch_group_key, read_heads, retained_keys};
 
 /// How often the send/receive tick runs — the file-carrier counterpart of `lan.rs`'s
 /// `RESYNC_INTERVAL`; short enough that this crate's own 30 s convergence deadline
 /// (`relay-converge-test`) comfortably contains several ticks, long enough not to busy-poll disk.
 const FILE_CARRIER_POLL_INTERVAL: Duration = Duration::from_millis(250);
-/// `sealed_ops`/`Session` elsewhere in this crate always operate on the current group-key epoch;
-/// the file carrier has no rotation-awareness of its own yet, same scope limit `lan_session.rs`'s
-/// own `GROUP_EPOCH` constant already accepts.
-const GROUP_EPOCH: u32 = 0;
 
 /// This device's one file-carrier surface for a `--sync-dir`, shared by every open workspace
 /// naming it. Bound once, before any workspace opens — mirrors `DeviceRelay`'s own device-level
@@ -126,7 +122,7 @@ pub fn start(device_file_carrier: Arc<DeviceFileCarrier>) -> FileCarrierTranspor
 fn seal_message(
     group: GroupId,
     workspace: WorkspaceId,
-    key: &GroupKey,
+    key: &EpochKey,
     msg: &Message,
 ) -> Option<Frame> {
     let plain = msg
@@ -135,10 +131,10 @@ fn seal_message(
         .ok()?;
     let for_ = SealFor {
         group,
-        epoch: GROUP_EPOCH,
+        epoch: key.epoch,
         workspace,
     };
-    let sealed = aead_seal(plain.version, for_, key, &plain.body)
+    let sealed = aead_seal(plain.version, for_, &key.key, &plain.body)
         .inspect_err(|e| tracing::warn!(%workspace, error = %e, "file_carrier_seal_failed"))
         .ok()?;
     Some(Frame {
@@ -154,7 +150,7 @@ fn seal_message(
 fn send_route(
     route: &WorkspaceRoute,
     workspace: WorkspaceId,
-    key: &GroupKey,
+    key: &EpochKey,
     carrier: &mut FileCarrier,
     last_sent: &mut Heads,
 ) {
@@ -162,7 +158,7 @@ fn send_route(
     if ranges.is_empty() {
         return;
     }
-    let signing_key = derive_group_op_signing_key(key);
+    let signing_key = key.signing_key();
     let messages = match serve_want(&route.ws, &ranges, workspace, &signing_key) {
         Ok(m) => m,
         Err(e) => return log_serve_want_failed(workspace, &e),
@@ -206,7 +202,7 @@ fn log_advance_gap(workspace: WorkspaceId, gap: &txtodo_sync::Gap) {
 /// against its own `last_sent` entry.
 fn send_new_ops(
     device_file_carrier: &DeviceFileCarrier,
-    key: &GroupKey,
+    key: &EpochKey,
     carrier: &mut FileCarrier,
     last_sent: &mut HashMap<WorkspaceId, Heads>,
 ) {
@@ -251,7 +247,6 @@ fn open_and_verify(
     group: GroupId,
     workspace: WorkspaceId,
     keys: &GroupKeys,
-    verify_key: DevicePublicKey,
 ) -> Option<Vec<txtodo_model::Op>> {
     let Message::Ops {
         ops, signatures, ..
@@ -259,7 +254,9 @@ fn open_and_verify(
     else {
         return None;
     };
-    let device_keys = device_keys_for(&ops, verify_key);
+    // Signed with the key of the epoch it was sealed under, which may be an older one.
+    let epoch = sealed_epoch(&frame.body)?;
+    let device_keys = device_keys_for(&ops, verify_key(keys, epoch)?);
     verify_batch(&ops, &signatures, &device_keys)
         .inspect_err(|e| tracing::warn!(error = %e, "file_carrier_verify_failed"))
         .ok()?;
@@ -307,7 +304,6 @@ fn route_logged(
 fn recv_new_ops(
     device_file_carrier: &DeviceFileCarrier,
     keys: &GroupKeys,
-    verify_key: DevicePublicKey,
     carrier: &mut FileCarrier,
     rt: &Handle,
 ) {
@@ -323,7 +319,7 @@ fn recv_new_ops(
         let Some((workspace, route)) = route_frame(device_file_carrier, &frame) else {
             continue;
         };
-        if let Some(ops) = open_and_verify(&frame, route.group, workspace, keys, verify_key) {
+        if let Some(ops) = open_and_verify(&frame, route.group, workspace, keys) {
             commit_ops(&route.ws, rt, ops);
         }
     }
@@ -361,11 +357,10 @@ fn tick(
     };
     let mut carrier = device_file_carrier.lock();
     send_new_ops(device_file_carrier, &key, &mut carrier, last_sent);
-    let Some(keys) = single_epoch_keys(key.clone()) else {
+    let Some(keys) = retained_keys(&any_route.ws, key.epoch) else {
         return;
     };
-    let verify_key = derive_group_op_signing_key(&key).public_key();
-    recv_new_ops(device_file_carrier, &keys, verify_key, &mut carrier, rt);
+    recv_new_ops(device_file_carrier, &keys, &mut carrier, rt);
 }
 
 async fn run(device_file_carrier: Arc<DeviceFileCarrier>) {
@@ -377,3 +372,7 @@ async fn run(device_file_carrier: Arc<DeviceFileCarrier>) {
         tick(&device_file_carrier, &rt, &mut last_sent);
     }
 }
+
+#[cfg(test)]
+#[path = "file_carrier_epoch_tests.rs"]
+mod epoch_tests;

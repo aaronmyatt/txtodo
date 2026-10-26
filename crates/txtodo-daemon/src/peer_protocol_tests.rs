@@ -99,7 +99,7 @@ fn a_control_frame_of_another_version_is_reported() {
         WorkspaceRegistry::open(&dir.path().join("registry.db"))
             .unwrap_or_else(|e| panic!("registry: {e}")),
     );
-    let seen = drive_control_session(&mut OtherVersionLink, &identity, &registry);
+    let seen = drive_control_session(&mut OtherVersionLink, &identity, &registry, None);
     assert_eq!(seen, PeerSignal::OtherProtocol(THEIRS));
 }
 

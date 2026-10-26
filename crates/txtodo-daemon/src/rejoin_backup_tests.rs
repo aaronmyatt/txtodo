@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use super::{GUARD_HEAD, Plan, move_aside, move_back, plan, remove_guard, stamp};
+use super::{GUARD_HEAD, Plan, move_aside, move_back, move_into, plan, remove_guard, stamp};
 
 /// 2026-09-26T15:02:11Z.
 const NOW_MS: u64 = 1_790_434_931_000;
@@ -151,4 +151,29 @@ fn a_guard_left_by_a_crash_moves_like_state() {
     move_aside(&p).unwrap_or_else(|e| panic!("{e}"));
     assert!(read(&p.backup.join(".txtodo")).contains("an earlier run"));
     assert!(read(&root.join(".txtodo")).starts_with(GUARD_HEAD));
+}
+
+#[test]
+fn moving_into_a_folder_keeps_it_and_a_failure_moves_everything_back() {
+    let (_dir, root) = workspace();
+    let into = root.with_file_name("clone");
+    std::fs::create_dir_all(&into).unwrap_or_else(|e| panic!("mkdir: {e}"));
+    let mut p = Plan {
+        backup: into.clone(),
+        ..plan(&root, NOW_MS).unwrap_or_else(|e| panic!("{e}"))
+    };
+    p.documents.insert(2, "tasks/gone/todo.txt".to_owned());
+    let err = move_into(&p).err().unwrap_or_else(|| panic!("must fail"));
+    assert!(err.contains("nothing was moved in the end"), "{err}");
+    assert_eq!(read(&root.join(".txtodo/oplog.db")), "old store");
+    assert!(into.is_dir(), "the folder stays, empty");
+
+    p.documents.remove(2);
+    move_into(&p).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(read(&into.join("todo.txt")), "(A) twice\n(A) twice\n");
+    assert_eq!(read(&into.join(".txtodo/oplog.db")), "old store");
+    assert!(
+        read(&root.join(".txtodo")).starts_with(GUARD_HEAD),
+        "the source is guarded"
+    );
 }

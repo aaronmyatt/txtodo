@@ -1,9 +1,9 @@
 // tasks/desktop-playwright-tests (superseded "raw mode" stretch, plan §3.2/§7): the document is
 // always a live, editable buffer — no separate mode to toggle. Real `txtodod` behind the
-// test-only `e2e_bridge` (see tasks/desktop-playwright-tests/notes.md for the harness) — `apply`
-// is the exact RPC the duplicate sheet already uses, so these scenarios exercise the real `Apply`
-// path, never mocks. `ControlOrMeta` is Playwright's own cross-platform stand-in for CM6's "Mod"
-// keymap convention (Cmd on macOS, Ctrl elsewhere): https://playwright.dev/docs/api/class-keyboard.
+// test-only `e2e_bridge` (see tasks/desktop-playwright-tests/notes.md for the harness), so these
+// scenarios exercise the real `Apply` path, never mocks. `ControlOrMeta` is Playwright's own
+// cross-platform stand-in for CM6's "Mod" keymap convention (Cmd on macOS, Ctrl elsewhere):
+// https://playwright.dev/docs/api/class-keyboard.
 import { expect, test } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -72,6 +72,30 @@ test("blur commits an in-progress edit", async ({ page }) => {
 	await page.getByRole("textbox", { name: "Search" }).click();
 
 	await expect.poll(() => readFileSync(todoPath, "utf8")).toContain("+errand");
+});
+
+test("a concurrent change during an in-progress edit never overwrites the buffer", async ({ page }) => {
+	daemon = await spawnDaemon("todo");
+	await gotoWithDaemon(page, daemon);
+	const todoPath = join(daemon.dir, "todo.txt");
+
+	const content = page.locator(".editor-shell .cm-content");
+	await page.locator(".cm-line", { hasText: "call mum" }).first().click();
+	await page.keyboard.press("End");
+	await page.keyboard.type(" +errand");
+
+	// Another client adds a line while this buffer is still dirty: straight through the bridge, as
+	// a second client would through the daemon.
+	const res = await fetch(`http://127.0.0.1:${daemon.port}/invoke`, {
+		method: "POST",
+		headers: { "content-type": "application/json" },
+		body: JSON.stringify({ cmd: "apply", args: { path: "todo.txt", mutations: [{ kind: "add", line: "pay rent" }] } })
+	});
+	expect(res.ok).toBe(true);
+	await expect.poll(() => readFileSync(todoPath, "utf8")).toContain("pay rent");
+
+	// The concurrent change did not silently overwrite the human's in-progress edit.
+	await expect(content).toContainText("+errand");
 });
 
 test("navigating away (breadcrumb Home) commits a dirty buffer before the view unmounts", async ({

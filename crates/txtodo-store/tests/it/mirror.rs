@@ -1,5 +1,5 @@
-//! The mirror snapshot round-trips with its seq, and a commit leaves it alone (ADR 0038: only
-//! `notes.md` writes one now).
+//! The mirror snapshot round-trips with its seq (notes.md's `NotesDoc` keeps one), and a todo.txt
+//! commit lands none (ADR 0038). The needs_review flags these tests also covered are gone.
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in their helpers.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
@@ -34,20 +34,19 @@ fn mirror_snapshot_round_trips_with_its_seq_and_replaces_the_previous_one() {
 }
 
 #[test]
-fn a_commit_leaves_an_old_mirror_row_alone() {
+fn a_todo_txt_commit_lands_no_mirror_row() {
     use txtodo_store::{CommitExtras, Projection};
     let dir = tempfile::tempdir().unwrap();
     let mut store = Store::open(&dir.path().join("oplog.db")).unwrap();
-    // An old todo.txt mirror row (ADR 0038): a commit neither reads nor rewrites it.
-    store.put_mirror(&todo(), b"old-mirror", Seq(3)).unwrap();
     let projection = Projection {
         file: todo(),
         bytes: b"resolved\n".to_vec(),
         hash: [7; 32],
         written_at_ms: 200,
     };
+    let extras = CommitExtras::default();
     let range = store
-        .commit_change_with(&[], &projection, None, &CommitExtras::default())
+        .commit_change_with(&[], &projection, None, &extras)
         .unwrap();
     assert!(range.is_none(), "no ops in this commit");
     assert_eq!(
@@ -56,7 +55,7 @@ fn a_commit_leaves_an_old_mirror_row_alone() {
     );
     assert_eq!(
         store.get_mirror(&todo()).unwrap(),
-        Some((b"old-mirror".to_vec(), Seq(3))),
-        "the old row stays as it was"
+        None,
+        "a todo.txt commit lands no mirror row (ADR 0038)"
     );
 }

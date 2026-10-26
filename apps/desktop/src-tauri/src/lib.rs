@@ -6,6 +6,7 @@
 
 mod commands;
 mod commands_activity;
+pub mod commands_assets;
 mod commands_connect;
 mod commands_devices;
 mod commands_duplicates;
@@ -17,9 +18,11 @@ mod commands_tokens;
 mod commands_ui_log;
 pub mod commands_universal;
 pub mod commands_universal_edit;
+mod commands_upgrade;
 mod commands_version;
 mod commands_window;
 mod commands_workspace;
+mod notify;
 // `pub` (not `mod`): the `e2e-bridge` feature's `src/bin/e2e_bridge.rs` binary is a separate crate
 // target that only sees this library's public surface, and it reuses these DTOs and their
 // `From<pb::...>` conversions directly rather than re-deriving them (tasks/desktop-playwright-
@@ -72,6 +75,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         // https://v2.tauri.app/plugin/global-shortcut/ — backs the quick-add hotkey (`quick_add`).
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        // https://v2.tauri.app/plugin/notification/ — another client's changes (`notify.rs`).
+        .plugin(tauri_plugin_notification::init())
         .setup(setup)
         .invoke_handler(handlers())
         .build(tauri::generate_context!())
@@ -117,12 +122,21 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         commands_sync::sync_status,
         commands_ui_log::ui_log,
         commands_version::build_info,
+        commands_upgrade::check_updates,
+        commands_upgrade::run_upgrade,
+        commands_upgrade::relaunch,
+        notify::set_change_notices,
+        commands_assets::save_note_asset,
+        commands_assets::read_note_asset,
         commands_window::set_pinned,
         commands_workspace::list_workspaces,
         commands_workspace::workspace_layout,
         commands_workspace::add_workspace,
         commands_workspace::remove_workspace,
         commands_workspace::rename_workspace,
+        commands_workspace::new_list,
+        commands_workspace::rename_list,
+        commands_workspace::remove_list,
         commands_workspace::switch_workspace,
         commands_universal::universal_tasks,
         commands_universal_edit::universal_set_done,
@@ -138,6 +152,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         commands_tokens::token_create,
         commands_tokens::token_list,
         commands_devices::device_list,
+        commands_devices::group_status,
         commands_offers::workspace_offers,
         commands_offers::accept_offer,
         commands_offers::decline_offer,
@@ -169,9 +184,20 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         if let Err(e) = commands_connect::connect_and_store(&handle, &state).await {
             log_startup_connect_failed(&e);
             commands::set_status(&handle, &state, status::DaemonStatus::Dead).await;
+            return;
         }
+        ask_for_repo_scan(&state).await;
     });
     Ok(())
+}
+
+/// Every open looks for new git repos holding a todo list (task two-kinds-of-workspace): the daemon
+/// scans in the background and registers and readies what it finds. Best effort; an older daemon
+/// has no scan and the app goes on.
+async fn ask_for_repo_scan(state: &AppState) {
+    if let Ok(mut client) = state.client_snapshot().await {
+        let _ = client.repos_scan().await;
+    }
 }
 
 /// The startup daemon-connect attempt (`.setup()`, above) used to discard its `Result` entirely

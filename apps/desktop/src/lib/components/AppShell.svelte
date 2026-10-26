@@ -16,6 +16,7 @@
 	import { requestWorkspaceMenu } from "$lib/workspaceMenu";
 	import { editorStatus, SAVE_LABEL } from "$lib/stores/editorStatus";
 	import PinToggle from "./PinToggle.svelte";
+	import { IS_WEB } from "$lib/web/mode";
 	import PromptBar from "./PromptBar.svelte";
 	import Toasts from "./Toasts.svelte";
 	import SyncIndicator from "./SyncIndicator.svelte";
@@ -37,6 +38,7 @@
 	// Help. Never while the reader is typing in a field, an editor or a dialog.
 	// Ref: https://svelte.dev/docs/kit/$app-navigation#goto
 	let searchEl: HTMLInputElement | undefined = $state();
+	let promptBar: PromptBar | undefined = $state();
 	const chords = new Chords();
 	const ROUTES: Record<string, string> = {
 		"nav.tasks": "/",
@@ -86,10 +88,19 @@
 		return index > 0 ? `${index}/${hits}` : `${hits}`;
 	});
 
+	/** Esc on a focused button or link lets go of it (a closed menu hands focus back to its
+	 * toggle), so list mode's keys work again. Nothing is stopped: a panel that closes on Esc still
+	 * hears it. https://developer.mozilla.org/en-US/docs/Web/API/Element/matches */
+	function releaseControl() {
+		const el = document.activeElement;
+		if (el instanceof HTMLElement && el.matches("button, a[href], [role='button'], summary")) el.blur();
+	}
+
 	function onKeydown(e: KeyboardEvent) {
 		if (e.defaultPrevented || isTypingTarget(e.target)) return;
 		const name = keyName(e);
 		if (!name) return;
+		if (name === "Esc") releaseControl();
 		// List mode needs the Tasks page with nothing holding the keyboard: a focused button keeps
 		// its own Space and Enter.
 		const listMode = path === "/" && (document.activeElement === null || document.activeElement === document.body);
@@ -102,6 +113,7 @@
 		else if (hit.id === "nav.workspace_menu") requestWorkspaceMenu();
 		else if (isListCommand(hit.id)) runListCommand(hit.id);
 		else if (hit.id === "search.focus") searchEl?.focus();
+		else if (hit.id === "prompt.focus") promptBar?.focus();
 		else if (ROUTES[hit.id]) void goto(ROUTES[hit.id]);
 	}
 </script>
@@ -143,7 +155,8 @@
 		</nav>
 
 		<div class="actions">
-			<PinToggle />
+			<!-- A browser tab is not the page's to pin (ADR 0042, client-parity app.pin). -->
+			{#if !IS_WEB}<PinToggle />{/if}
 			<ThemeToggle />
 			<a href="/help" class="icon-button" aria-label="Help" title="Help">
 				<Icon name="help" />
@@ -156,7 +169,7 @@
 	</div>
 
 	<Toasts />
-	<PromptBar />
+	<PromptBar bind:this={promptBar} />
 
 	<!-- The status footer: the main buffer's save state and caret, sync, and the keys for this view. -->
 	<footer class="status-bar">

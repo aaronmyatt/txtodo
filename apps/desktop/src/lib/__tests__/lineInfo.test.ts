@@ -44,6 +44,13 @@ describe("completedLineInfo", () => {
 	it("does not match a description that merely starts with x", () => {
 		expect(completedLineInfo("xylophone lessons @home")).toBeNull();
 	});
+
+	it("is done with no date or priority, as the core parses it", () => {
+		expect(completedLineInfo("x buy milk")).toEqual({ descriptionStart: 2 });
+		expect(completedLineInfo("x")).toEqual({ descriptionStart: 1 });
+		expect(completedLineInfo("x (A) buy milk")).toEqual({ descriptionStart: "x (A) ".length });
+		expect(completedLineInfo("x (A) 2011-03-03 Call Mom")).toEqual({ descriptionStart: "x (A) 2011-03-03 ".length });
+	});
 });
 
 describe("findIdTagRanges", () => {

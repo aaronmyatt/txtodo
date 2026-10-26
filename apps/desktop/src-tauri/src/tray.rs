@@ -69,9 +69,14 @@ fn on_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
 }
 
 /// Shows and focuses the main window — the tray's "Open" item, and the counterpart to `lib.rs`'s
-/// hide-on-close handler (which only hides, never destroys, the window this brings back).
+/// hide-on-close handler (which only hides, never destroys, the window this brings back). It
+/// opens filling the screen every time, as at launch (`tauri.conf.json` `maximized`; root todo
+/// 2026-10-11 "always open fullscreen"): maximized, not macOS full screen, which gets a Space of
+/// its own that hiding the window would leave behind empty.
+/// Ref: https://docs.rs/tauri/latest/tauri/webview/struct.WebviewWindow.html#method.maximize
 pub(crate) fn show_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
+        let _ = window.maximize();
         let _ = window.show();
         let _ = window.set_focus();
     }

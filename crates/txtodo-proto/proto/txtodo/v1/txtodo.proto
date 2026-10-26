@@ -42,11 +42,10 @@ service Txtodo {
   rpc Checkout(CheckoutRequest) returns (FileContents);
   // Liveness for `txtodo doctor` and tests.
   rpc Health(HealthRequest) returns (HealthResponse);
-  // Open needs_review flags for a document (plan M4): two devices rewrote the same word.
+  // A document's duplicate lines (ADR 0032). The needs_review flags it also listed, and
+  // `ResolveConflict`, went with the Loro mirror (ADR 0038): an older client's call to
+  // `ResolveConflict` now gets UNIMPLEMENTED.
   rpc ListConflicts(ConflictsRequest) returns (ConflictsResponse);
-  // Resolves one flag: writes the chosen side back (mine/theirs) or keeps the file (merged),
-  // and clears the flag — both or neither.
-  rpc ResolveConflict(ResolveRequest) returns (ApplyResponse);
 
   // notes.md for one task's ref: directory (plan M5, design §7). The daemon resolves the task
   // to its ref dir; the client never resolves a slug or touches the filesystem itself.
@@ -107,12 +106,51 @@ service Txtodo {
   // refills it from the peer. Refused (FAILED_PRECONDITION, nothing changed) unless a paired
   // device offered this workspace lately, and for the default workspace. Device-level, no selector.
   rpc WorkspaceRejoin(WorkspaceRejoinRequest) returns (WorkspaceRejoinResponse);
+  // Moves a Remote mirror into a folder (task spike-txtodo-should-merge-remote-workspa): the
+  // folder's own copy, and the workspace registered there if any, move aside into a new
+  // time-stamped folder beside it as for a rejoin (never deleted, never sent); then the mirror's
+  // `.txtodo/` and documents move in, and the mirror's id now answers at that folder. Same store,
+  // so nothing is re-sent. Refused (FAILED_PRECONDITION, nothing changed) unless `workspace_id` is
+  // a Remote mirror, and for a folder that overlaps another workspace, sits under the data dir, or
+  // is on another disk. Device-level, no selector.
+  rpc WorkspaceBind(WorkspaceBindRequest) returns (WorkspaceBindResponse);
   // Sets or clears the name every paired device shows for a workspace (task
   // workspace-vanity-name): the `name` line of its `txtodo.toml`, written as ops, so it syncs.
   // Returns the workspace, showing the new name. INVALID_ARGUMENT for a bad name, NOT_FOUND for an
   // unknown id, FAILED_PRECONDITION when the file holds `name` in a form it cannot edit.
   // Device-level, no selector.
   rpc WorkspaceRename(WorkspaceRenameRequest) returns (WorkspaceInfo);
+
+  // --- named lists (task two-kinds-of-workspace, ADR 0043) ---
+  // Device-level like the registry RPCs above: no selector. A list is a workspace under
+  // `<data dir>/lists/<name>/` whose id comes from its name, so every own device's `work` is the
+  // same list.
+
+  // Makes the list `name` when this device has none by that name and registers it under the id the
+  // name gives; a list that is already there is returned unchanged (`created` false).
+  // INVALID_ARGUMENT for a bad name, ALREADY_EXISTS when that id is a list renamed to another name.
+  rpc ListEnsure(ListEnsureRequest) returns (ListEnsureResponse);
+  // Changes the name a list shows (the `WorkspaceRename` write); its id and folder stay.
+  // INVALID_ARGUMENT for a bad name, NOT_FOUND for an unknown list, ALREADY_EXISTS when another
+  // list shows or was made under the new name.
+  rpc ListRename(ListRenameRequest) returns (WorkspaceInfo);
+  // Un-registers a list on this device and moves its folder into a time-stamped sibling; never
+  // deletes, never tells the other devices, which keep the list. FAILED_PRECONDITION for the
+  // default list, NOT_FOUND for an unknown one.
+  rpc ListRemove(ListRemoveRequest) returns (ListRemoveResponse);
+
+  // --- repos (task two-kinds-of-workspace, ADR 0043) ---
+  // A repo is a git clone holding a todo list; git syncs it, txtodo never does. Device-level.
+
+  // The folders the daemon scans for repos, and the scan itself. `add_roots` and `remove_roots`
+  // change the roots first (INVALID_ARGUMENT for a root that is not an absolute path); `scan` then
+  // starts a scan of them now, in the background unless `wait`. All empty reads the state. The roots
+  // and when the last scan finished come back.
+  rpc Repos(ReposRequest) returns (ReposResponse);
+  // Moves each Remote mirror of a workspace that is now a repo aside, into a time-stamped sibling
+  // of its folder (never deleted, never sent), and un-registers it. `dry_run` changes nothing. A
+  // mirror still being filled by a peer is the same as any other: its copy moves.
+  rpc MirrorsRetire(MirrorsRetireRequest) returns (MirrorsRetireResponse);
 
   // Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
   rpc PairOffer(PairOfferRequest) returns (PairOfferResponse);
@@ -261,6 +299,9 @@ message FileContents {
 message WatchRequest {
   repeated string paths = 1;
   WorkspaceSelector workspace = 2;
+  // This client shows its own change notices (the desktop): while any Watch stream that set this
+  // is open, the daemon shows none of its own (ADR 0041). False from an older client.
+  bool shows_notices = 3;
 }
 
 message OpSummary {
@@ -278,20 +319,11 @@ message OpSummary {
   string source = 10;
 }
 
-// One needs_review flag: the description each side had when they diverged (plan M4).
-message ReviewFlag {
-  string task_id = 1;         // ULID text
-  uint32 line_number = 2;     // 1-based line the task sits on now; 0 when it is no longer in the file
-  string mine = 3;            // this device's description at flag time
-  string theirs = 4;          // the peer's description at flag time
-  uint64 raised_at_ms = 5;
-}
-
 message Change {
   string path = 1;
   bytes hash = 2;
   repeated OpSummary ops = 3;
-  repeated ReviewFlag review = 4;   // flags raised by this change (an import), if any
+  reserved 4;  // `review`, the needs_review flags a change raised (ADR 0038)
   // This ref's fresh rule-5 progress when `path` is a todo.txt the change could have affected
   // (plan M5, tasks/proto-tree-progress); unset otherwise. Never a second source of truth: the
   // same number `ListFiles` would return for this node right now.
@@ -319,24 +351,8 @@ message DuplicateGroup {
 }
 
 message ConflictsResponse {
-  repeated ReviewFlag flags = 1;
+  reserved 1;  // `flags`, the open needs_review flags (ADR 0038)
   repeated DuplicateGroup duplicates = 2;  // empty from an older daemon
-}
-
-// Which side wins. `MERGED` keeps what is in the file and only clears the flag.
-enum Resolution {
-  RESOLUTION_UNSPECIFIED = 0;
-  RESOLUTION_MINE = 1;
-  RESOLUTION_THEIRS = 2;
-  RESOLUTION_MERGED = 3;
-}
-
-message ResolveRequest {
-  string path = 1;
-  TaskRef task = 2;
-  Resolution resolution = 3;
-  WorkspaceSelector workspace = 4;
-  AgentPrincipal agent = 5;   // unset = the user on this device (task mcp-conflicts-parity: an MCP agent's resolution is attributed to it)
 }
 
 // A line addressed two ways; the daemon rejects the mutation when they disagree (stale client).
@@ -497,6 +513,10 @@ message HealthResponse {
   string offers_problem = 22;
   // How long ago `offers_problem` was seen, milliseconds; 0 when it is empty.
   uint64 offers_problem_age_ms = 23;
+  // Every session lately showed only frames sealed under a group key this device does not hold: it
+  // was dropped from the group (another device pruned or removed it) and has to pair again (task
+  // peer-prune, ADR 0044). Clears when a frame opens, the epoch moves, or it pairs. Device-level.
+  bool dropped_from_group = 24;
 }
 
 // --- notes.md (plan M5, design §7) ---
@@ -508,10 +528,10 @@ message NotesDoc {
 }
 
 // `GetNotes`'s own request: a bare `TaskRef` carries no workspace selector, and every nested use
-// of `TaskRef` (inside `Complete`/`Edit`/`Move`/`Delete`/`MoveToEnd`/`ResolveRequest`/
+// of `TaskRef` (inside `Complete`/`Edit`/`Move`/`Delete`/`MoveToEnd`/
 // `NotesEditRequest`/`RefDirRequest`) would carry a meaningless unused one if the field lived on
-// `TaskRef` itself — so `GetNotes` gets its own wrapper, the same shape `ResolveRequest` already
-// uses to pair a `TaskRef` with call-specific fields.
+// `TaskRef` itself — so `GetNotes` gets its own wrapper pairing a `TaskRef` with call-specific
+// fields.
 message GetNotesRequest {
   TaskRef task = 1;
   WorkspaceSelector workspace = 2;
@@ -719,6 +739,12 @@ message Device {
   // default-workspace-pairing-consent), so the default workspace merges with it. Devices paired
   // before the question existed count as own. False from an older daemon.
   bool own_device = 10;
+  // Set on a removed row (task peer-prune, ADR 0044). "" when unknown (removed before the daemon
+  // recorded it, or an older daemon); else "manual", "pruned_quiet", "pruned_parked" (this device
+  // dropped it for being silent) or "left_out" (another device dropped it and this one followed).
+  string removed_reason = 11;
+  string removed_by = 12;        // ULID text of the device that removed it; "" when unknown
+  uint64 removed_at_ms = 13;     // 0 = not removed
 }
 
 message DeviceListRequest {
@@ -863,6 +889,14 @@ message SyncStatusResponse {
 
 // --- workspace registry (ADR 0025, task `cli-workspace-commands`, M11) ---
 
+// Which carrier syncs a workspace (task two-kinds-of-workspace, ADR 0043). Read off the root by the
+// daemon, never stored.
+enum WorkspaceKind {
+  WORKSPACE_KIND_UNSPECIFIED = 0;  // an older daemon: kind unknown, a client shows none
+  WORKSPACE_KIND_LIST = 1;         // the default or a folder under `<data dir>/lists/`; txtodo syncs it
+  WORKSPACE_KIND_REPO = 2;         // every other folder; git syncs it, txtodo never does
+}
+
 // One entry in the device-global workspace registry.
 // How far one registered workspace is through being opened by this daemon (task
 // daemon-early-bind): the daemon binds its socket first and opens workspaces in the background.
@@ -902,6 +936,9 @@ message WorkspaceInfo {
   // `default` for the default workspace, or the root's folder name. Empty from an older daemon,
   // which a client reads as "derive one from `root`".
   string name = 12;
+  // Which carrier syncs this workspace (task two-kinds-of-workspace). UNSPECIFIED from an older
+  // daemon, which a client reads as "kind unknown" and shows none.
+  WorkspaceKind kind = 13;
 }
 
 message WorkspaceAddRequest {
@@ -981,6 +1018,29 @@ message WorkspaceRejoinResponse {
   repeated string offering_devices = 4;
 }
 
+// --- bind a Remote mirror into a folder (task spike-txtodo-should-merge-remote-workspa) ---
+
+message WorkspaceBindRequest {
+  string workspace_id = 1;   // the Remote mirror's WorkspaceId ULID text
+  string root = 2;           // the folder it moves into: absolute, and it must exist
+  bool dry_run = 3;          // only say what would move; change nothing
+}
+
+message WorkspaceBindResponse {
+  // The workspace afterwards: `root` is the folder, `is_remote` false. For a dry run, as it is now.
+  WorkspaceInfo workspace = 1;
+  // The new folder beside `root` that the folder's own copy moved into; empty when nothing had to
+  // move. For a dry run, the name it would have had at that moment.
+  string backup_dir = 2;
+  // What moved out of the folder (or would), relative to it, `/` separators: `.txtodo`,
+  // `txtodo.toml` when present, and every synced document.
+  repeated string moved_aside = 3;
+  // What moved in from the mirror's folder (or would), in the same form.
+  repeated string moved_in = 4;
+  // The workspace registered at `root` before, now un-registered (ULID text); empty when none.
+  string replaced_workspace_id = 5;
+}
+
 // --- vanity name (task workspace-vanity-name) ---
 
 message WorkspaceRenameRequest {
@@ -989,6 +1049,66 @@ message WorkspaceRenameRequest {
   // Trimmed; at most 256 bytes, no control characters. Empty clears it, and the workspace shows
   // its folder name again.
   string name = 2;
+}
+
+// --- named lists (task two-kinds-of-workspace, ADR 0043) ---
+
+message ListEnsureRequest {
+  // The list's name: ASCII `[a-z0-9_-]`, 1 to 48 characters, never `default`. The daemon lowercases
+  // and trims it first. The name is the list's identity on every own device, for good.
+  string name = 1;
+}
+
+message ListEnsureResponse {
+  WorkspaceInfo workspace = 1;
+  bool created = 2;   // false when the list was already here
+}
+
+message ListRenameRequest {
+  string list = 1;       // the list's shown name, else the name it was made under
+  string new_name = 2;   // same rules as ListEnsureRequest.name
+}
+
+message ListRemoveRequest {
+  string list = 1;       // the list's shown name, else the name it was made under
+}
+
+message ListRemoveResponse {
+  bool removed = 1;
+  string moved_to = 2;   // where the folder went; empty when `removed` is false
+}
+
+// --- repos (task two-kinds-of-workspace, ADR 0043) ---
+
+message ReposRequest {
+  repeated string add_roots = 1;      // absolute folders to scan under
+  repeated string remove_roots = 2;
+  bool scan = 3;                      // start a scan now
+  bool wait = 4;                      // with `scan`: answer when it has finished
+}
+
+message ReposResponse {
+  repeated string roots = 1;          // the scan roots after any change
+  uint64 last_scan_ms = 2;            // when the last scan finished; 0 for never
+  bool running = 3;                   // a scan is going now
+  uint32 found = 4;                   // repos the last finished scan found
+  uint32 registered = 5;              // of those, how many it registered that were new
+}
+
+message MirrorsRetireRequest {
+  string workspace_id = 1;            // one mirror, or empty for every Remote mirror
+  bool dry_run = 2;
+}
+
+message RetiredMirror {
+  string workspace_id = 1;
+  string root = 2;                    // the mirror's folder
+  string moved_to = 3;                // where it went (or would go, on a dry run)
+  string name = 4;                    // the name it showed
+}
+
+message MirrorsRetireResponse {
+  repeated RetiredMirror mirrors = 1;
 }
 
 // --- test-only LAN sync seam (plan M4 `sync-lan-transport`) ---

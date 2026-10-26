@@ -1,9 +1,8 @@
 //! Where a peer's workspace may land (sync-drift line 4): only in an empty folder.
 //!
-//! Joining on `PairAccept` (`WorkspaceCatalog::adopt_offered_workspace_id`, which rekeys a folder
-//! in place) and mirroring an offer (`WorkspaceCatalog::mirror_workspace`) both make a folder hold
-//! the peer's workspace. Lines already in that folder were minted under ids of their own, so the
-//! peer's copy of the same lines lands beside them as duplicates. Both refuse such a folder.
+//! Mirroring an offer (`WorkspaceCatalog::mirror_workspace`), a rejoin and a bind make a folder
+//! hold the peer's workspace. Lines already in that folder were minted under ids of their own, so
+//! the peer's copy of the same lines lands beside them as duplicates. Each refuses such a folder.
 //!
 //! "Empty" means nothing sync would merge: every document the walker finds (each `todo.txt`, the
 //! root list `txtodo.toml` names, each `notes.md`) holds nothing but whitespace. Other files (a

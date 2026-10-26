@@ -1,14 +1,56 @@
 <script lang="ts">
 	// Settings > General (task desktop-ui-revamp): pin on top (the same store as the header pin),
-	// what closing the window does today, save-on-blur (always on, decision 3), and the daemon's
-	// status with Retry.
+	// what closing the window does today, save-on-blur (always on, decision 3), the daemon's
+	// status with Retry, and Updates (task self-upgrade): Check asks the txtodo CLI, Upgrade runs
+	// it, Relaunch starts the new build. Nothing goes to the network until Check is pressed.
 	import { onMount } from "svelte";
-	import { daemonStatus, onDaemonStatus, retryConnect, type DaemonStatus } from "$lib/daemon";
+	import {
+		checkUpdates,
+		daemonStatus,
+		onDaemonStatus,
+		relaunch,
+		retryConnect,
+		runUpgrade,
+		type DaemonStatus,
+		type UpdateCheck
+	} from "$lib/daemon";
 	import { pinned, setPinned } from "$lib/stores/pin";
+	import { changeNotices, setChangeNotices } from "$lib/stores/changeNotices";
 	import SettingsRow from "./SettingsRow.svelte";
+	import { IS_WEB } from "$lib/web/mode";
 
 	let status = $state<DaemonStatus>("connecting");
 	let retrying = $state(false);
+
+	// The Updates row: what the last check said, and what is running now.
+	let update = $state<UpdateCheck | null>(null);
+	let updateNote = $state("");
+	let updating = $state<"" | "checking" | "upgrading" | "done">("");
+
+	async function check() {
+		updating = "checking";
+		updateNote = "";
+		try {
+			update = await checkUpdates();
+			updateNote = update.newer ? `${update.latest} is out` : `${update.latest} is the newest`;
+			updating = "";
+		} catch (e) {
+			updateNote = String(e);
+			updating = "";
+		}
+	}
+
+	async function upgrade() {
+		updating = "upgrading";
+		updateNote = update ? `Running: ${update.command}` : "";
+		try {
+			updateNote = await runUpgrade();
+			updating = "done";
+		} catch (e) {
+			updateNote = String(e);
+			updating = "";
+		}
+	}
 
 	async function retry() {
 		retrying = true;
@@ -26,8 +68,18 @@
 	});
 </script>
 
+<!-- The browser build has no window to pin, no OS notices, no menu bar, no installed release and
+	no daemon (ADR 0042): only the save row is its. -->
+{#if !IS_WEB}
 <SettingsRow label="Pin on top" description="Keep this window above other windows." for="s-pin">
 	<input id="s-pin" type="checkbox" class="d-toggle" checked={$pinned} onchange={(e) => void setPinned(e.currentTarget.checked)} />
+</SettingsRow>
+<SettingsRow
+	label="Notify on changes"
+	description="A notification when an agent, another device or another app edits, completes or deletes tasks, while this window is in the background. Bursts arrive as one."
+	for="s-notices"
+>
+	<input id="s-notices" type="checkbox" class="d-toggle" checked={$changeNotices} onchange={(e) => void setChangeNotices(e.currentTarget.checked)} />
 </SettingsRow>
 <SettingsRow
 	label="Keep running in the menu bar"
@@ -35,16 +87,31 @@
 >
 	<span class="badge">always on</span>
 </SettingsRow>
+{/if}
 <SettingsRow
 	label="Save when the buffer loses focus"
 	description="Edits save as you go, and again whenever you leave the editor. Nothing waits for a Save button."
 >
 	<span class="badge">always on</span>
 </SettingsRow>
+{#if !IS_WEB}
+<SettingsRow label="Updates" description="Checks GitHub for a newer release, then upgrades this device the way it was installed.">
+	{#if updateNote}
+		<span class="status" role="status">{updateNote}</span>
+	{/if}
+	{#if updating === "done"}
+		<button type="button" class="retry" onclick={() => void relaunch()}>Relaunch</button>
+	{:else if update?.newer}
+		<button type="button" class="retry" disabled={updating !== ""} onclick={upgrade}>Upgrade</button>
+	{:else}
+		<button type="button" class="retry" disabled={updating !== ""} onclick={check}>Check</button>
+	{/if}
+</SettingsRow>
 <SettingsRow label="Daemon" description="txtodod keeps your files and syncs them. Retry reconnects, starting it if it is not running.">
 	<span class="status" role="status"><span class="dot {status}"></span>{status}</span>
 	<button type="button" class="retry" disabled={retrying || status === "connecting" || status === "spawning"} onclick={retry}>Retry</button>
 </SettingsRow>
+{/if}
 
 <style>
 	.badge {

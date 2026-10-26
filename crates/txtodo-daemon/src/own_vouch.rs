@@ -89,6 +89,8 @@ pub(crate) fn sender_of(msg: &ControlMessage) -> DeviceId {
         ControlMessage::Offer { sender, .. }
         | ControlMessage::OfferAck { sender, .. }
         | ControlMessage::Decline { sender, .. }
-        | ControlMessage::OwnDevices { sender, .. } => *sender,
+        | ControlMessage::OwnDevices { sender, .. }
+        | ControlMessage::Grant { sender, .. }
+        | ControlMessage::Epoch { sender, .. } => *sender,
     }
 }

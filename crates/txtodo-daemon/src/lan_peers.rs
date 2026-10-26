@@ -12,6 +12,7 @@ use txtodo_sync::{
 };
 
 use crate::device_identity::DeviceIdentity;
+use crate::live_peers::LivePeers;
 use crate::peer_keys::SessionEnd;
 
 /// Shared across the run loop and every spawned dial task.
@@ -24,6 +25,8 @@ pub(crate) type KnownPeers = Arc<Mutex<BTreeMap<DeviceId, DiscoveredPeer>>>;
 pub(crate) struct DialState {
     last_attempt_ms: BTreeMap<DeviceId, u64>,
     failures: BTreeMap<DeviceId, u32>,
+    /// The `LivePeers::dial_generation` this was last cleared for.
+    generation: u64,
 }
 
 impl DialState {
@@ -135,7 +138,10 @@ pub(crate) fn known_or(known_peers: &KnownPeers, peer: DiscoveredPeer) -> Discov
 /// `relay_autodial::resync_and_dial` calls this each tick and then gates each one through
 /// [`try_begin_dial`], so a peer whose last dial failed is left alone until its backoff elapses.
 /// A parked peer (no shared key, `peer_keys.rs`) is left out: known peers are never pruned, so a
-/// peer that joined another group would otherwise be dialed forever.
+/// peer that joined another group would otherwise be dialed forever. A removed one is still dialed,
+/// with the growing backoff of any dial that gets no `Hello` back: it cannot open ours, which is how
+/// it learns it was dropped (`PeerKeys::dropped_from_group`). Its own `Hello`, if it sent one, is
+/// refused (`lan_session_dispatch::greet_for_peer`), so nothing syncs.
 pub(crate) fn peers_to_resync(
     known_peers: &KnownPeers,
     identity: &DeviceIdentity,
@@ -172,6 +178,19 @@ pub(crate) fn worth_dialing(
     }
     dial_state.record_attempt(peer.device, now_ms);
     Some(peer)
+}
+
+/// Forgets every backoff when the dial generation has moved (a pairing, a new epoch): a peer dialed
+/// in vain for a minute because it was removed, or held another key, is dialed again at once when
+/// that is no longer so, not when the backoff, up to a minute, runs out.
+pub(crate) fn follow_dial_generation(dial_state: &SharedDialState, live: &LivePeers) {
+    let now = live.dial_generation();
+    let mut state = dial_state.lock().unwrap_or_else(PoisonError::into_inner);
+    if state.generation != now {
+        state.generation = now;
+        state.last_attempt_ms.clear();
+        state.failures.clear();
+    }
 }
 
 /// The resync tick's gate: `true` (and the attempt booked) when `peer`'s backoff has elapsed,

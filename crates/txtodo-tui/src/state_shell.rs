@@ -21,6 +21,11 @@ pub struct Shell {
     pub prompt_typed_at: Option<Instant>,
     /// The `W` popup's rows, filled when it opens.
     pub menu: WorkspaceMenu,
+    /// The `m`/`c` list picker (`list_picker.rs`).
+    pub picker: crate::list_picker::ListPicker,
+    /// The next Apply that lands is not put on `u`'s stack (a move: an Undo would take back only
+    /// the half in this list).
+    pub pending_no_undo: bool,
     /// Whether the daemon's `Watch` stream is up.
     pub link: Link,
     /// The daemon's version and release date (`Health`), when they are not this build's.
@@ -31,6 +36,8 @@ pub struct Shell {
     pub saved_at: Option<Instant>,
     /// Toasts, oldest first.
     pub toasts: Vec<Toast>,
+    /// Other clients' changes, folded into one toast per burst (`app_notices.rs`).
+    pub notices: txtodo_core::notice::Debouncer,
     /// What the next Apply toasts when it lands; dropped when it is refused.
     pub pending_toast: Option<String>,
     /// This session's changes, newest last: what `u` and a toast's Undo take back.
@@ -132,11 +139,14 @@ impl Default for Shell {
             prompt: crate::state::EditDraft::new_line(),
             prompt_typed_at: None,
             menu: WorkspaceMenu::default(),
+            picker: crate::list_picker::ListPicker::default(),
+            pending_no_undo: false,
             link: Link::default(),
             daemon_build: None,
             refused: None,
             saved_at: None,
             toasts: Vec::new(),
+            notices: txtodo_core::notice::Debouncer::new("tui"),
             pending_toast: None,
             changes: Vec::new(),
             next_change: 0,
@@ -169,9 +179,43 @@ pub struct Refused {
     pub text: String,
 }
 
+/// Which carrier syncs a workspace (task two-kinds-of-workspace, ADR 0043).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum WsKind {
+    /// An older daemon: the kind is not known, so none is shown.
+    #[default]
+    Unknown,
+    /// txtodo syncs it between the user's own devices (the default is one).
+    List,
+    /// git syncs it; txtodo does not.
+    Repo,
+}
+
+impl WsKind {
+    /// The kind of a listed workspace.
+    pub fn of(w: &txtodo_proto::v1::WorkspaceInfo) -> WsKind {
+        match w.kind() {
+            txtodo_proto::v1::WorkspaceKind::List => WsKind::List,
+            txtodo_proto::v1::WorkspaceKind::Repo => WsKind::Repo,
+            txtodo_proto::v1::WorkspaceKind::Unspecified => WsKind::Unknown,
+        }
+    }
+
+    /// `list`, `repo`, or nothing for an unknown kind.
+    pub fn label(self) -> &'static str {
+        match self {
+            WsKind::Unknown => "",
+            WsKind::List => "list",
+            WsKind::Repo => "repo",
+        }
+    }
+}
+
 /// One workspace in the `W` popup.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct MenuItem {
+    /// Which carrier syncs it.
+    pub kind: WsKind,
     /// `WorkspaceInfo.workspace_id`: what a switch names.
     pub id: String,
     /// The folder name, or `default` for the default workspace.
@@ -196,7 +240,9 @@ pub struct WorkspaceMenu {
 
 impl WorkspaceMenu {
     /// Fills the popup, the cursor on the open workspace.
-    pub fn fill(&mut self, items: Vec<MenuItem>) {
+    pub fn fill(&mut self, mut items: Vec<MenuItem>) {
+        // Lists first (the default among them), repos after; the daemon's order within each.
+        items.sort_by_key(|i| i.kind == WsKind::Repo);
         self.cursor = items.iter().position(|i| i.current).unwrap_or(0);
         self.items = items;
     }

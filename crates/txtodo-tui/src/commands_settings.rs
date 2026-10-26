@@ -18,7 +18,9 @@ pub enum SettingsAction {
     Refresh,
     /// Register the folder at this path.
     AddWorkspace(String),
-    /// Unregister this workspace.
+    /// Make the list with this name (task two-kinds-of-workspace).
+    NewList(String),
+    /// Unregister this workspace; a list moves its folder aside instead.
     RemoveWorkspace(String),
     /// Set the name every paired device shows for this workspace; empty clears it.
     RenameWorkspace {
@@ -41,6 +43,8 @@ pub enum SettingsAction {
     RevokeToken(String),
     /// Write the preferences file.
     SavePrefs,
+    /// Ask `txtodo upgrade --check` (task self-upgrade).
+    CheckUpdates,
 }
 
 /// The card in view, if Settings is showing.
@@ -125,6 +129,7 @@ fn activate(state: &mut AppState, row: SRow) -> Option<Action> {
         }
         return Some(Action::Settings(match act {
             Act::AddWorkspace => SettingsAction::AddWorkspace(text),
+            Act::NewList => SettingsAction::NewList(text),
             Act::PairCode => SettingsAction::PairAccept(text),
             _ => SettingsAction::CreateToken(text),
         }));
@@ -218,6 +223,18 @@ fn run_act(state: &mut AppState, act: Act) -> Option<Action> {
             Some(Action::Copy(secret))
         }
         Act::RefreshActivity => Some(Action::Settings(SettingsAction::Refresh)),
+        other => run_update_act(&other),
+    }
+}
+
+/// The "Updates" row (task self-upgrade): check, or quit and upgrade.
+fn run_update_act(act: &Act) -> Option<Action> {
+    match act {
+        Act::CheckUpdates => Some(Action::Settings(SettingsAction::CheckUpdates)),
+        Act::Upgrade => {
+            crate::app_upgrade::request_after_exit();
+            Some(Action::Quit)
+        }
         _ => None,
     }
 }

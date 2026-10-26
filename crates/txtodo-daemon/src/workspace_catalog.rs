@@ -51,6 +51,12 @@ pub struct WorkspaceCatalog {
     /// Where offered workspaces are mirrored, canonical (task remote-workspace-mirror); unset means
     /// nothing is mirrored. See `workspace_catalog_mirror.rs`.
     pub(crate) remote_root: std::sync::OnceLock<std::path::PathBuf>,
+    /// Where named lists live, canonical (task two-kinds-of-workspace); unset means this daemon
+    /// has none. See `workspace_catalog_lists.rs`.
+    pub(crate) lists_root: std::sync::OnceLock<std::path::PathBuf>,
+    /// The repo scan's running flag and last report (task two-kinds-of-workspace). See
+    /// `workspace_catalog_repos.rs`.
+    pub(crate) scan: crate::workspace_catalog_repos::ScanState,
 }
 
 /// Default bound on a request waiting for a workspace that is still loading: the client-side spawn
@@ -76,6 +82,8 @@ impl WorkspaceCatalog {
             last_touch: Mutex::new(HashMap::new()),
             default: std::sync::OnceLock::new(),
             remote_root: std::sync::OnceLock::new(),
+            lists_root: std::sync::OnceLock::new(),
+            scan: crate::workspace_catalog_repos::ScanState::default(),
         }
     }
 

@@ -29,6 +29,17 @@ describe("specs/client-parity.toml", () => {
 		}
 	});
 
+	// The browser build's optional column (ADR 0042): a valid status where present, and its reason
+	// written into the deviation after "In the browser:".
+	it("gives every web field a status and an In the browser reason", () => {
+		const web = manifest.action.filter((a) => a.web !== undefined);
+		expect(web.length).toBeGreaterThan(0);
+		for (const a of web) {
+			expect(STATUSES, `${a.id} web`).toContain((a.web as { status?: string }).status);
+			expect(String(a.deviation), a.id as string).toContain("In the browser:");
+		}
+	});
+
 	it("never leaves a differs or na row without its deviation", () => {
 		for (const a of manifest.action) {
 			const statuses = ["desktop", "tui"].map((c) => (a[c] as { status: string }).status);

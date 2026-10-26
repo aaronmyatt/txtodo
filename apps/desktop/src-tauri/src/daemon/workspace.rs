@@ -19,6 +19,17 @@ impl DaemonClient {
         Ok(self.inner.workspace_add(req).await?.into_inner())
     }
 
+    /// Asks the daemon to scan for git clones holding a todo list now (task two-kinds-of-workspace,
+    /// ADR 0043). The scan runs in the background, so this returns at once; the daemon registers and
+    /// readies what it finds. An older daemon answers `UNIMPLEMENTED`.
+    pub async fn repos_scan(&mut self) -> Result<pb::ReposResponse, DaemonError> {
+        let req = pb::ReposRequest {
+            scan: true,
+            ..pb::ReposRequest::default()
+        };
+        Ok(self.inner.repos(req).await?.into_inner())
+    }
+
     /// Un-registers a workspace id; never touches `root/.txtodo/` on disk.
     pub async fn workspace_remove(&mut self, id: &str) -> Result<bool, DaemonError> {
         let req = pb::WorkspaceRemoveRequest {
@@ -40,6 +51,36 @@ impl DaemonClient {
             name: name.to_owned(),
         };
         Ok(self.inner.workspace_rename(req).await?.into_inner())
+    }
+
+    /// Makes the named list when this device has none (task two-kinds-of-workspace, ADR 0043);
+    /// a list that is already here comes back with `created` false.
+    pub async fn list_ensure(&mut self, name: &str) -> Result<pb::ListEnsureResponse, DaemonError> {
+        let req = pb::ListEnsureRequest {
+            name: name.to_owned(),
+        };
+        Ok(self.inner.list_ensure(req).await?.into_inner())
+    }
+
+    /// Changes the name a list shows; `list` is the name it shows or was made under (its folder).
+    pub async fn list_rename(
+        &mut self,
+        list: &str,
+        new_name: &str,
+    ) -> Result<pb::WorkspaceInfo, DaemonError> {
+        let req = pb::ListRenameRequest {
+            list: list.to_owned(),
+            new_name: new_name.to_owned(),
+        };
+        Ok(self.inner.list_rename(req).await?.into_inner())
+    }
+
+    /// Takes a list off this device: its folder moves aside, never deleted.
+    pub async fn list_remove(&mut self, list: &str) -> Result<pb::ListRemoveResponse, DaemonError> {
+        let req = pb::ListRemoveRequest {
+            list: list.to_owned(),
+        };
+        Ok(self.inner.list_remove(req).await?.into_inner())
     }
 
     /// Workspaces paired devices have offered and this device has not answered yet.
@@ -212,6 +253,17 @@ impl DaemonClient {
             .await?
             .into_inner();
         Ok((health.offers_problem, health.offers_problem_age_ms))
+    }
+
+    /// Whether the group left this device out (`Health.dropped_from_group`, task `peer-prune`).
+    /// Selector-less `Health`: it is device-level.
+    pub async fn dropped_from_group(&mut self) -> Result<bool, DaemonError> {
+        let health = self
+            .inner
+            .health(pb::HealthRequest { workspace: None })
+            .await?
+            .into_inner();
+        Ok(health.dropped_from_group)
     }
 }
 

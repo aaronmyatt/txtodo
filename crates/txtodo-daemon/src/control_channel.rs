@@ -190,7 +190,8 @@ pub(crate) fn spawn_session(
     tokio::task::spawn_blocking(move || {
         let _permit = permit;
         let mut link = link;
-        let seen = crate::control_session::drive_control_session(&mut link, &identity, &registry);
+        let seen =
+            crate::control_session::drive_control_session(&mut link, &identity, &registry, dialed);
         identity.peer_keys().book(dialed, seen, "control");
     });
 }

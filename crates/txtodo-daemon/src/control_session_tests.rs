@@ -15,8 +15,10 @@ use txtodo_sync::{
 };
 
 use crate::clock::FakeClock;
-use crate::control_session::drive_control_session;
+use crate::control_session::{drive_control_session, outbound_offers};
 use crate::device_identity::DeviceIdentity;
+use crate::list_workspace::ListName;
+use crate::workspace_offer_registry::WorkspaceOfferRegistry;
 use crate::workspace_registry::WorkspaceRegistry;
 
 const GROUP_EPOCH: u32 = 0;
@@ -42,6 +44,30 @@ fn send_plain(link: &mut dyn Link, group: GroupId, key: &GroupKey, msg: ControlM
     link.send(frame).unwrap_or_else(|e| panic!("send: {e}"));
 }
 
+/// B answers A's `Epoch` with its own, then its one registered workspace as an `Offer`.
+fn expect_epoch_then_offer(
+    link: &mut dyn Link,
+    group: GroupId,
+    keys: &GroupKeys,
+    (device_b, workspace_b_id): (txtodo_model::DeviceId, txtodo_store::WorkspaceId),
+) {
+    match recv_plain(link, group, keys) {
+        ControlMessage::Epoch { sender, epoch } => assert_eq!((sender, epoch), (device_b, 0)),
+        other => panic!("expected B's Epoch, got {other:?}"),
+    }
+    match recv_plain(link, group, keys) {
+        ControlMessage::Offer {
+            sender,
+            workspace_id,
+            ..
+        } => {
+            assert_eq!(sender, device_b);
+            assert_eq!(workspace_id, workspace_b_id.ulid().to_u128());
+        }
+        other => panic!("expected an Offer from device B, got {other:?}"),
+    }
+}
+
 /// The full round trip: device B's real `drive_control_session` sends its own active workspace as
 /// an `Offer` first (received and asserted by the test script, which plays device A's side of the
 /// connection), then receives device A's own `Offer` and records it — proving both halves of the
@@ -62,15 +88,17 @@ fn drive_control_session_sends_and_records_offers_for_real() {
     let workspace_b_dir = tempfile::tempdir().unwrap();
     let mut registry_b = WorkspaceRegistry::open(&registry_b_dir.path().join("registry.db"))
         .unwrap_or_else(|e| panic!("{e}"));
-    let workspace_b_id = registry_b
-        .add(workspace_b_dir.path(), &clock)
+    // A list: the default and lists are what a device offers (a repo's list is not, ADR 0043).
+    let workspace_b_id = ListName::parse("work").unwrap().id();
+    registry_b
+        .adopt(workspace_b_id, workspace_b_dir.path(), &clock)
         .unwrap_or_else(|e| panic!("{e}"));
     let registry_b = Mutex::new(registry_b);
 
     let (mut link_a, mut link_b) = channel_link_pair();
 
     let session = std::thread::spawn(move || {
-        drive_control_session(&mut link_b, &identity_b, &registry_b);
+        drive_control_session(&mut link_b, &identity_b, &registry_b, None);
         identity_b
     });
 
@@ -78,19 +106,17 @@ fn drive_control_session_sends_and_records_offers_for_real() {
     let mut keys = GroupKeys::new();
     keys.insert(GROUP_EPOCH, group_key.clone()).unwrap();
 
-    // B sends first (send_all_offers runs before its receive loop) — its one registered workspace.
-    let from_b = recv_plain(&mut link_a, group, &keys);
-    match from_b {
-        ControlMessage::Offer {
-            sender,
-            workspace_id,
-            ..
-        } => {
-            assert_eq!(sender, device_b);
-            assert_eq!(workspace_id, workspace_b_id.ulid().to_u128());
-        }
-        other => panic!("expected an Offer from device B, got {other:?}"),
-    }
+    // B accepted, so it waits for A to speak (`control_flow.rs`): A says which epoch it is on.
+    send_plain(
+        &mut link_a,
+        group,
+        &group_key,
+        ControlMessage::Epoch {
+            sender: device_a,
+            epoch: GROUP_EPOCH,
+        },
+    );
+    expect_epoch_then_offer(&mut link_a, group, &keys, (device_b, workspace_b_id));
 
     // Now A offers its own workspace back, then closes — ending B's receive loop, the same way a
     // real IrohLink's idle timeout eventually does in production.
@@ -118,6 +144,28 @@ fn drive_control_session_sends_and_records_offers_for_real() {
     assert_eq!(recorded[0].name, "from-a");
 }
 
+/// Only a list is offered (ADR 0043): git carries a repo, so no peer is told it exists, and the
+/// default is on every device already, so a foreign peer is shown nothing.
+#[test]
+fn only_lists_are_offered() {
+    let (state, clock) = (tempfile::tempdir().unwrap(), FakeClock::new(1_000));
+    let mut registry = WorkspaceRegistry::open(&state.path().join("registry.db")).unwrap();
+    let folder = |name: &str| {
+        let dir = state.path().join(name);
+        std::fs::create_dir(&dir).unwrap();
+        dir
+    };
+    let default = crate::default_workspace::default_workspace_id();
+    let list = ListName::parse("work").unwrap().id();
+    registry.add(&folder("repo"), &clock).unwrap();
+    registry.adopt(default, &folder("default"), &clock).unwrap();
+    registry.adopt(list, &folder("work"), &clock).unwrap();
+
+    let offers = outbound_offers(&Mutex::new(registry), &WorkspaceOfferRegistry::new());
+    let ids: Vec<_> = offers.iter().map(|(id, _)| *id).collect();
+    assert_eq!(ids, vec![list], "{offers:?}");
+}
+
 /// Task `control-channel-keystore-visibility`: a group-key read that fails leaves its reason on the
 /// device's `LanStatus` (what `Health` and `WorkspacePendingOffers` report), and the next session
 /// that reads the key cleanly clears it. A corrupt stored key stands in for the OS keystore not
@@ -135,7 +183,7 @@ fn a_failed_group_key_read_is_recorded_and_a_good_one_clears_it() {
         Mutex::new(WorkspaceRegistry::open(&registry_dir.path().join("registry.db")).unwrap());
 
     let (_peer, mut link) = channel_link_pair();
-    drive_control_session(&mut link, &identity, &registry);
+    drive_control_session(&mut link, &identity, &registry, None);
     let (why, _at_ms) = identity
         .lan_status()
         .offers_problem()
@@ -148,6 +196,6 @@ fn a_failed_group_key_read_is_recorded_and_a_good_one_clears_it() {
         .unwrap();
     let (peer, mut link) = channel_link_pair();
     drop(peer);
-    drive_control_session(&mut link, &identity, &registry);
+    drive_control_session(&mut link, &identity, &registry, None);
     assert!(identity.lan_status().offers_problem().is_none(), "cleared");
 }

@@ -1,0 +1,5 @@
+x 2026-10-17 2026-10-17 store: Registry::set_root repoints an active workspace row to a new root +m11 @store — de4506bc; the unique active-root index refuses a root another row holds
+x 2026-10-17 2026-10-17 proto: WorkspaceBind RPC (workspace_id, root, dry_run), additive +m11 @proto — f192c4e6; WorkspaceBindResponse names what moved each way and the workspace it replaced
+x 2026-10-17 2026-10-17 daemon: WorkspaceCatalog::bind moves a Remote mirror into a folder; the folder's own copy moves aside, its workspace is un-registered +m11 @daemon — 0413a798; two-daemon e2e: edits flow both ways after a bind
+x 2026-10-17 2026-10-17 cli: txtodo workspace bind <id> shows what moves, asks unless --yes, --dry-run +m11 @cli — 4856c97a; unit tests on the prompt and JSON; the RPC itself is proven by the daemon's two-daemon e2e
+x 2026-10-17 2026-10-17 cli: doctor warns when this folder's workspace shares its name with a Remote one, and names the bind command +m11 @cli — 2ab63bda; the backlog playbook runs doctor once and hands a bind warning to the human

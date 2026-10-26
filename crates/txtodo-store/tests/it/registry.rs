@@ -221,3 +221,107 @@ fn touch_records_recency_on_an_active_row_only() {
         None
     );
 }
+
+#[test]
+fn set_root_repoints_an_active_row_and_keeps_its_id() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut registry = open(dir.path());
+    registry.insert(&entry(1, "/data/remote/1", 1_000)).unwrap();
+    registry.insert(&entry(2, "/home/a/clone", 1_000)).unwrap();
+
+    // The clone's own row holds the root, so the unique index refuses it until that row goes.
+    let err = registry
+        .set_root(workspace(1), "/home/a/clone")
+        .unwrap_err();
+    assert!(format!("{err}").contains("set workspace root"));
+    registry.remove(workspace(2), 2_000).unwrap();
+
+    assert!(registry.set_root(workspace(1), "/home/a/clone").unwrap());
+    let row = registry.get(workspace(1)).unwrap().unwrap();
+    assert_eq!(
+        (row.root.as_str(), row.added_at_ms),
+        ("/home/a/clone", 1_000)
+    );
+    let found = registry.find_active_by_root("/home/a/clone").unwrap();
+    assert_eq!(found.map(|r| r.id), Some(workspace(1)));
+    assert!(
+        registry
+            .find_active_by_root("/data/remote/1")
+            .unwrap()
+            .is_none()
+    );
+
+    assert!(
+        !registry.set_root(workspace(404), "/x").unwrap(),
+        "unknown id"
+    );
+    assert!(
+        !registry.set_root(workspace(2), "/y").unwrap(),
+        "removed id"
+    );
+}
+
+#[test]
+fn restore_brings_a_removed_row_back_under_the_same_id_and_root() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut registry = open(dir.path());
+    registry
+        .insert(&entry(1, "/data/lists/work", 1_000))
+        .unwrap();
+    registry.touch(workspace(1), 1_500).unwrap();
+    assert!(registry.remove(workspace(1), 2_000).unwrap());
+    assert!(
+        registry
+            .find_active_by_root("/data/lists/work")
+            .unwrap()
+            .is_none()
+    );
+
+    assert!(registry.restore(workspace(1), 3_000).unwrap());
+    let back = registry.get(workspace(1)).unwrap().expect("still there");
+    assert_eq!(back.root, "/data/lists/work", "the root is kept");
+    assert!(back.removed_at_ms.is_none(), "active again");
+    assert_eq!(back.added_at_ms, 3_000, "registered again now");
+    assert!(back.last_active_ms.is_none(), "recency starts over");
+    assert_eq!(registry.list_active().unwrap().len(), 1);
+}
+
+#[test]
+fn restore_reports_false_for_an_unknown_or_an_active_row() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut registry = open(dir.path());
+    assert!(!registry.restore(workspace(404), 1_000).unwrap());
+    registry
+        .insert(&entry(1, "/data/lists/work", 1_000))
+        .unwrap();
+    assert!(
+        !registry.restore(workspace(1), 2_000).unwrap(),
+        "already active"
+    );
+    assert_eq!(
+        registry.get(workspace(1)).unwrap().unwrap().added_at_ms,
+        1_000
+    );
+}
+
+#[test]
+fn a_root_taken_off_the_registry_reads_as_removed_until_it_is_registered_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut registry = open(dir.path());
+    assert!(
+        !registry.root_was_removed("/home/a/code/x").unwrap(),
+        "never seen"
+    );
+    registry.insert(&entry(1, "/home/a/code/x", 1_000)).unwrap();
+    assert!(
+        !registry.root_was_removed("/home/a/code/x").unwrap(),
+        "active"
+    );
+    registry.remove(workspace(1), 2_000).unwrap();
+    assert!(registry.root_was_removed("/home/a/code/x").unwrap());
+    registry.insert(&entry(2, "/home/a/code/x", 3_000)).unwrap();
+    assert!(
+        !registry.root_was_removed("/home/a/code/x").unwrap(),
+        "registered again"
+    );
+}

@@ -20,7 +20,10 @@ pub const MAGIC: [u8; 4] = *b"TXTO";
 /// decode an `Ops` batch holding one, for the same reason.
 /// Bumped 4 -> 5 (ADR 0029, 2026-10-02 amendment): `ControlMessage::OwnDevices` appended. A v4 peer
 /// ends a control session on a variant it cannot decode.
-pub const PROTOCOL_VERSION: u16 = 5;
+/// Bumped 5 -> 6 (ADR 0044): `ControlMessage::Grant` appended, and ops now seal under the sender's
+/// current group epoch, not always 0. A v5 peer ends a control session on the new variant, and could
+/// not open a frame sealed under an epoch it never learned.
+pub const PROTOCOL_VERSION: u16 = 6;
 /// Largest body we will decode. Checked against the header *before* any allocation.
 pub const MAX_FRAME_BYTES: usize = 4 * 1024 * 1024;
 /// Header size in bytes: magic (4) + version (2) + len (4).

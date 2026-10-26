@@ -1,6 +1,6 @@
 //! The conflict half of the gRPC surface, in-process (split from `grpc.rs` for its file budget, so
-//! it carries its own copy of that file's small setup helpers): ListConflicts' duplicate groups and
-//! the removed ResolveConflict over a temp unix socket.
+//! it carries its own copy of that file's small setup helpers): ListConflicts' duplicate groups over
+//! a temp unix socket. The needs_review flags and ResolveConflict left the proto (ADR 0038).
 //! tonic over UDS: https://github.com/hyperium/tonic/tree/master/examples/src/uds
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in their helpers.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
@@ -83,55 +83,6 @@ async fn apply_add(client: &mut Client, line: &str) -> pb::ApplyResponse {
         .into_inner()
 }
 
-async fn get_todo(client: &mut Client) -> Vec<u8> {
-    client
-        .get_file(pb::GetFileRequest {
-            path: "todo.txt".into(),
-            workspace: None,
-        })
-        .await
-        .unwrap_or_else(|e| panic!("get: {e}"))
-        .into_inner()
-        .bytes
-}
-
-/// Same-word review went with the todo.txt mirror (ADR 0038): `ListConflicts` sends no flags and
-/// `ResolveConflict` answers `Unimplemented` until the proto drops it, writing nothing.
-#[tokio::test]
-async fn list_conflicts_sends_no_flags_and_resolve_is_unimplemented() {
-    let dir = tempfile::tempdir().unwrap();
-    std::fs::write(dir.path().join("todo.txt"), "").unwrap();
-    let (mut client, _stop) = serve(dir.path()).await;
-    apply_add(&mut client, "first task").await;
-    let listed = client
-        .list_conflicts(pb::ConflictsRequest {
-            path: "todo.txt".into(),
-            workspace: None,
-        })
-        .await
-        .unwrap()
-        .into_inner();
-    assert!(listed.flags.is_empty());
-    assert!(listed.duplicates.is_empty());
-
-    let before = get_todo(&mut client).await;
-    let err = client
-        .resolve_conflict(pb::ResolveRequest {
-            path: "todo.txt".into(),
-            task: Some(pb::TaskRef {
-                line_number: 1,
-                task_id: String::new(),
-            }),
-            resolution: pb::Resolution::Merged as i32,
-            workspace: None,
-            agent: None,
-        })
-        .await
-        .unwrap_err();
-    assert_eq!(err.code(), tonic::Code::Unimplemented);
-    assert_eq!(get_todo(&mut client).await, before, "nothing is written");
-}
-
 async fn duplicates_of(client: &mut Client) -> Vec<pb::DuplicateGroup> {
     client
         .list_conflicts(pb::ConflictsRequest {
@@ -196,6 +147,7 @@ async fn identical_lines_are_a_duplicate_group_until_one_is_deleted() {
         .watch(pb::WatchRequest {
             paths: vec!["todo.txt".into()],
             workspace: None,
+            shows_notices: false,
         })
         .await
         .unwrap()

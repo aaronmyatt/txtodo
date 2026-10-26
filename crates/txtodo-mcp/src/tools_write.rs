@@ -36,7 +36,7 @@ pub async fn move_task(
     backend: &dyn McpBackend,
     args: MoveArgs,
 ) -> Result<CallToolResult, ErrorData> {
-    let anchor = move_anchor(args.before, args.after)?;
+    let anchor = move_anchor(args.before, args.after, args.to_file)?;
     json_result(&backend.move_task(args.id, anchor, args.workspace).await?)
 }
 

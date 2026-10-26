@@ -1,7 +1,7 @@
-//! `txtodo conflicts [list|delete|keep-newest]`: a file's duplicate lines (ADR 0032), two or more
-//! tasks whose whole lines are the same bytes. Every subcommand needs the daemon, which derives the
-//! groups from the file it holds. Same-word review (`needs_review` flags and `conflicts resolve`)
-//! went with the todo.txt mirror (ADR 0038).
+//! `txtodo conflicts [list]`, `delete` and `keep-newest`: a document's duplicate lines (ADR
+//! 0032), lines that read the same. The daemon derives the groups, so every subcommand needs it.
+//! The `needs_review` flags and `conflicts resolve <line> mine|theirs|merged` went with the Loro
+//! mirror (ADR 0038, conflict review A): nothing raises a flag any more.
 
 use crate::client::Daemon;
 use crate::{CliError, Ctx};
@@ -12,7 +12,7 @@ use txtodo_proto::v1 as pb;
 /// The `txtodo conflicts` subcommands.
 #[derive(Debug, Subcommand)]
 pub enum Action {
-    /// The file's duplicate groups, one block per group.
+    /// The duplicate groups, one block per group: its copies' lines.
     #[command(visible_alias = "ls")]
     List {
         /// Which document (workspace-relative); the workspace's root list by default.
@@ -65,7 +65,7 @@ pub fn run(
 }
 
 /// `conflicts list`: the file's duplicate groups (ADR 0032), or the todo.sh-style "nothing to
-/// report" line.
+/// report" line. The reply's `flags` is always empty since ADR 0038.
 pub fn run_list(daemon: &mut Daemon, file: &str, as_json: bool) -> Result<(), CliError> {
     let pb::ConflictsResponse { duplicates, .. } = daemon.conflicts(file)?;
     if duplicates.is_empty() {
@@ -80,7 +80,7 @@ pub fn run_list(daemon: &mut Daemon, file: &str, as_json: bool) -> Result<(), Cl
     Ok(())
 }
 
-/// The file's lines as they are now, for each group's copies.
+/// The file's lines as they are now, for the "what is in the file" row of `list`.
 fn current_lines(daemon: &mut Daemon, file: &str) -> Result<Vec<String>, CliError> {
     let bytes = daemon.get(file)?;
     Ok(parse_file(&bytes)

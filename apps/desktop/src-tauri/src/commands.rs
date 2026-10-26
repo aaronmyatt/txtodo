@@ -8,8 +8,8 @@
 //! `_inner` doing the real work — `#[instrument]`'s own expansion costs `clippy::cognitive_
 //! complexity` points, so the wrapper stays a one-line delegate and the original body (already
 //! at or near the budget in a few of these) is untouched in `_inner`. `skip_all` on every one:
-//! several of these carry real task/note text as an argument (`apply`'s `mutations`), so
-//! nothing about a command's arguments is ever captured in the span — ids, counts and
+//! several of these carry real task/note text as an argument (`apply`'s `mutations`, `get_notes`'
+//! `task`), so nothing about a command's arguments is ever captured in the span — ids, counts and
 //! outcomes only, never content (CLAUDE.md's logging rule). `#[tracing::instrument]` is listed
 //! *above* `#[tauri::command]` here, matching `txtodo-mcp/src/schema.rs`'s `#[tool]` convention,
 //! though for a different reason: unlike `rmcp`'s `#[tool]` (which rewrites an `async fn` into a
@@ -202,6 +202,7 @@ async fn watch_inner(app: AppHandle, state: State<'_, AppState>) -> Result<(), S
     let forwarder_app = app.clone();
     let task = tauri::async_runtime::spawn(async move {
         while let Ok(Some(change)) = stream.message().await {
+            crate::notify::on_change(&forwarder_app, &change);
             let _ = forwarder_app.emit("daemon-change", ChangeDto::from(change));
         }
         // The stream ended (daemon restart or a dropped connection): free the slot so the next

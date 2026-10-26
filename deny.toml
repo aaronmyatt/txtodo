@@ -6,9 +6,13 @@
 # paste, proc-macro-error, and the whole rust-unic stack (unic-common/char-range/char-property/
 # ucd-ident/ucd-version) are unmaintained, no safe upgrade, pulled in via tauri-utils → urlpattern.
 # No known vulnerability. Added 2026-09-13.
+# zbus_names, zvariant and zvariant_derive are unmaintained, no safe upgrade (their macros moved into
+# zbus 6). Pulled in by the desktop app's tauri-plugin-notification (notify-rust) and
+# tauri-plugin-opener; no known vulnerability. Added 2026-10-26.
 ignore = ["RUSTSEC-2026-0247", "RUSTSEC-2026-0248", "RUSTSEC-2026-0251", "RUSTSEC-2023-0089",
           "RUSTSEC-2024-0436", "RUSTSEC-2024-0370", "RUSTSEC-2025-0081", "RUSTSEC-2025-0075",
-          "RUSTSEC-2025-0080", "RUSTSEC-2025-0100", "RUSTSEC-2025-0098"]
+          "RUSTSEC-2025-0080", "RUSTSEC-2025-0100", "RUSTSEC-2025-0098",
+          "RUSTSEC-2026-0370", "RUSTSEC-2026-0371", "RUSTSEC-2026-0372"]
 
 [licenses]
 allow = ["MIT", "Apache-2.0", "Apache-2.0 WITH LLVM-exception", "BSD-2-Clause", "BSD-3-Clause",

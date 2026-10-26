@@ -169,6 +169,14 @@ impl DeviceIdentity {
     pub fn device_static_public(&self) -> DeviceStaticPublic {
         self.device_static.public_key()
     }
+    /// Opens a rotation grant a peer wrapped to this device's long-term key (task `peer-prune`); the
+    /// secret never leaves this type.
+    pub(crate) fn open_grant(
+        &self,
+        grant: &txtodo_sync::WrappedGrant,
+    ) -> Result<[u8; txtodo_sync::KEY_BYTES], txtodo_sync::RotationError> {
+        txtodo_sync::open_grant(grant, &self.device_static)
+    }
     /// This device's persisted relay-transport identity seed (task
     /// `daemon-workspace-identity-agreement` stage 1), stable across restarts. Opaque bytes: only
     /// `txtodo_sync::holepunch::RelayEndpoint::bind_with_secret_key` turns this into a real `iroh`
@@ -202,6 +210,7 @@ impl DeviceIdentity {
     pub(crate) fn set_group(&self, group: GroupId) {
         *self.group.lock().unwrap_or_else(PoisonError::into_inner) = group;
         self.peer_keys.clear();
+        self.live_peers.bump_dial_generation();
         self.stuck_sync.clear();
         self.split_files.clear_all();
     }
@@ -213,12 +222,21 @@ impl DeviceIdentity {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
     }
-    /// Updates only the in-memory epoch; the caller (`device_remove.rs`) persists first.
+    /// Updates only the in-memory epoch; the caller (`device_remove.rs`) persists first. A change
+    /// ends every live sync session, so each reconnects and seals under the new epoch.
     pub(crate) fn set_group_epoch(&self, new_epoch: u32) {
-        *self
-            .group_epoch
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner) = new_epoch;
+        let old = std::mem::replace(
+            &mut *self
+                .group_epoch
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner),
+            new_epoch,
+        );
+        if old != new_epoch {
+            self.live_peers.bump_own_generation();
+            self.live_peers.bump_dial_generation();
+            self.peer_keys.clear_epoch_misses();
+        }
     }
     /// This daemon's in-flight pairing bookkeeping — one attempt at a time, for the whole device,
     /// not per workspace (`pairing_grpc.rs`).

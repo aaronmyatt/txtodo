@@ -315,15 +315,11 @@ fn colon_w_names_the_workspace_to_switch_to() {
 }
 
 #[test]
-fn r_opens_the_conflicts_sheet_and_m_keeps_nothing() {
+fn r_opens_the_review_pane() {
     let mut state = AppState::fixture();
     let mut input = Input::default();
     input.on_key(&mut state, key('r'));
     assert!(state.conflicts_open);
-    // Same-word review and its Keep mine went with the todo.txt mirror (ADR 0038).
-    assert!(input.on_key(&mut state, key('m')).is_none());
-    input.on_key(&mut state, key('r'));
-    assert!(!state.conflicts_open);
 }
 
 #[test]

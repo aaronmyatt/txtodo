@@ -95,6 +95,8 @@ pub struct AppState {
     /// opens a fresh stream against the new client/workspace instead of a stale one; the
     /// forwarder clears it itself when its stream ends.
     pub watch: Mutex<WatchSlot>,
+    /// OS notifications for another client's changes (`notify.rs`, task change-notifications).
+    pub notices: crate::notify::Notices,
 }
 
 impl AppState {
@@ -122,6 +124,7 @@ impl AppState {
             current_workspace,
             main_popover_dirty: AtomicBool::new(false),
             watch: Mutex::new(WatchSlot::default()),
+            notices: crate::notify::Notices::default(),
         }
     }
 }

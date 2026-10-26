@@ -112,6 +112,10 @@ pub struct WatchRequest {
     pub paths: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "2")]
     pub workspace: ::core::option::Option<WorkspaceSelector>,
+    /// This client shows its own change notices (the desktop): while any Watch stream that set this
+    /// is open, the daemon shows none of its own (ADR 0041). False from an older client.
+    #[prost(bool, tag = "3")]
+    pub shows_notices: bool,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct OpSummary {
@@ -144,24 +148,6 @@ pub struct OpSummary {
     #[prost(string, tag = "10")]
     pub source: ::prost::alloc::string::String,
 }
-/// One needs_review flag: the description each side had when they diverged (plan M4).
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct ReviewFlag {
-    /// ULID text
-    #[prost(string, tag = "1")]
-    pub task_id: ::prost::alloc::string::String,
-    /// 1-based line the task sits on now; 0 when it is no longer in the file
-    #[prost(uint32, tag = "2")]
-    pub line_number: u32,
-    /// this device's description at flag time
-    #[prost(string, tag = "3")]
-    pub mine: ::prost::alloc::string::String,
-    /// the peer's description at flag time
-    #[prost(string, tag = "4")]
-    pub theirs: ::prost::alloc::string::String,
-    #[prost(uint64, tag = "5")]
-    pub raised_at_ms: u64,
-}
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Change {
     #[prost(string, tag = "1")]
@@ -170,9 +156,6 @@ pub struct Change {
     pub hash: ::prost::alloc::vec::Vec<u8>,
     #[prost(message, repeated, tag = "3")]
     pub ops: ::prost::alloc::vec::Vec<OpSummary>,
-    /// flags raised by this change (an import), if any
-    #[prost(message, repeated, tag = "4")]
-    pub review: ::prost::alloc::vec::Vec<ReviewFlag>,
     /// This ref's fresh rule-5 progress when `path` is a todo.txt the change could have affected
     /// (plan M5, tasks/proto-tree-progress); unset otherwise. Never a second source of truth: the
     /// same number `ListFiles` would return for this node right now.
@@ -210,25 +193,9 @@ pub struct DuplicateGroup {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ConflictsResponse {
-    #[prost(message, repeated, tag = "1")]
-    pub flags: ::prost::alloc::vec::Vec<ReviewFlag>,
     /// empty from an older daemon
     #[prost(message, repeated, tag = "2")]
     pub duplicates: ::prost::alloc::vec::Vec<DuplicateGroup>,
-}
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct ResolveRequest {
-    #[prost(string, tag = "1")]
-    pub path: ::prost::alloc::string::String,
-    #[prost(message, optional, tag = "2")]
-    pub task: ::core::option::Option<TaskRef>,
-    #[prost(enumeration = "Resolution", tag = "3")]
-    pub resolution: i32,
-    #[prost(message, optional, tag = "4")]
-    pub workspace: ::core::option::Option<WorkspaceSelector>,
-    /// unset = the user on this device (task mcp-conflicts-parity: an MCP agent's resolution is attributed to it)
-    #[prost(message, optional, tag = "5")]
-    pub agent: ::core::option::Option<AgentPrincipal>,
 }
 /// A line addressed two ways; the daemon rejects the mutation when they disagree (stale client).
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -524,6 +491,11 @@ pub struct HealthResponse {
     /// How long ago `offers_problem` was seen, milliseconds; 0 when it is empty.
     #[prost(uint64, tag = "23")]
     pub offers_problem_age_ms: u64,
+    /// Every session lately showed only frames sealed under a group key this device does not hold: it
+    /// was dropped from the group (another device pruned or removed it) and has to pair again (task
+    /// peer-prune, ADR 0044). Clears when a frame opens, the epoch moves, or it pairs. Device-level.
+    #[prost(bool, tag = "24")]
+    pub dropped_from_group: bool,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct NotesDoc {
@@ -537,10 +509,10 @@ pub struct NotesDoc {
     pub hash: ::prost::alloc::vec::Vec<u8>,
 }
 /// `GetNotes`'s own request: a bare `TaskRef` carries no workspace selector, and every nested use
-/// of `TaskRef` (inside `Complete`/`Edit`/`Move`/`Delete`/`MoveToEnd`/`ResolveRequest`/
+/// of `TaskRef` (inside `Complete`/`Edit`/`Move`/`Delete`/`MoveToEnd`/
 /// `NotesEditRequest`/`RefDirRequest`) would carry a meaningless unused one if the field lived on
-/// `TaskRef` itself — so `GetNotes` gets its own wrapper, the same shape `ResolveRequest` already
-/// uses to pair a `TaskRef` with call-specific fields.
+/// `TaskRef` itself — so `GetNotes` gets its own wrapper pairing a `TaskRef` with call-specific
+/// fields.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct GetNotesRequest {
     #[prost(message, optional, tag = "1")]
@@ -833,6 +805,17 @@ pub struct Device {
     /// before the question existed count as own. False from an older daemon.
     #[prost(bool, tag = "10")]
     pub own_device: bool,
+    /// Set on a removed row (task peer-prune, ADR 0044). "" when unknown (removed before the daemon
+    /// recorded it, or an older daemon); else "manual", "pruned_quiet", "pruned_parked" (this device
+    /// dropped it for being silent) or "left_out" (another device dropped it and this one followed).
+    #[prost(string, tag = "11")]
+    pub removed_reason: ::prost::alloc::string::String,
+    /// ULID text of the device that removed it; "" when unknown
+    #[prost(string, tag = "12")]
+    pub removed_by: ::prost::alloc::string::String,
+    /// 0 = not removed
+    #[prost(uint64, tag = "13")]
+    pub removed_at_ms: u64,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct DeviceListRequest {
@@ -1124,6 +1107,10 @@ pub struct WorkspaceInfo {
     /// which a client reads as "derive one from `root`".
     #[prost(string, tag = "12")]
     pub name: ::prost::alloc::string::String,
+    /// Which carrier syncs this workspace (task two-kinds-of-workspace). UNSPECIFIED from an older
+    /// daemon, which a client reads as "kind unknown" and shows none.
+    #[prost(enumeration = "WorkspaceKind", tag = "13")]
+    pub kind: i32,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct WorkspaceAddRequest {
@@ -1228,6 +1215,38 @@ pub struct WorkspaceRejoinResponse {
     pub offering_devices: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WorkspaceBindRequest {
+    /// the Remote mirror's WorkspaceId ULID text
+    #[prost(string, tag = "1")]
+    pub workspace_id: ::prost::alloc::string::String,
+    /// the folder it moves into: absolute, and it must exist
+    #[prost(string, tag = "2")]
+    pub root: ::prost::alloc::string::String,
+    /// only say what would move; change nothing
+    #[prost(bool, tag = "3")]
+    pub dry_run: bool,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WorkspaceBindResponse {
+    /// The workspace afterwards: `root` is the folder, `is_remote` false. For a dry run, as it is now.
+    #[prost(message, optional, tag = "1")]
+    pub workspace: ::core::option::Option<WorkspaceInfo>,
+    /// The new folder beside `root` that the folder's own copy moved into; empty when nothing had to
+    /// move. For a dry run, the name it would have had at that moment.
+    #[prost(string, tag = "2")]
+    pub backup_dir: ::prost::alloc::string::String,
+    /// What moved out of the folder (or would), relative to it, `/` separators: `.txtodo`,
+    /// `txtodo.toml` when present, and every synced document.
+    #[prost(string, repeated, tag = "3")]
+    pub moved_aside: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// What moved in from the mirror's folder (or would), in the same form.
+    #[prost(string, repeated, tag = "4")]
+    pub moved_in: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// The workspace registered at `root` before, now un-registered (ULID text); empty when none.
+    #[prost(string, tag = "5")]
+    pub replaced_workspace_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct WorkspaceRenameRequest {
     /// WorkspaceId ULID text
     #[prost(string, tag = "1")]
@@ -1237,6 +1256,103 @@ pub struct WorkspaceRenameRequest {
     /// its folder name again.
     #[prost(string, tag = "2")]
     pub name: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ListEnsureRequest {
+    /// The list's name: ASCII `\[a-z0-9_-\]`, 1 to 48 characters, never `default`. The daemon lowercases
+    /// and trims it first. The name is the list's identity on every own device, for good.
+    #[prost(string, tag = "1")]
+    pub name: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ListEnsureResponse {
+    #[prost(message, optional, tag = "1")]
+    pub workspace: ::core::option::Option<WorkspaceInfo>,
+    /// false when the list was already here
+    #[prost(bool, tag = "2")]
+    pub created: bool,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ListRenameRequest {
+    /// the list's shown name, else the name it was made under
+    #[prost(string, tag = "1")]
+    pub list: ::prost::alloc::string::String,
+    /// same rules as ListEnsureRequest.name
+    #[prost(string, tag = "2")]
+    pub new_name: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ListRemoveRequest {
+    /// the list's shown name, else the name it was made under
+    #[prost(string, tag = "1")]
+    pub list: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ListRemoveResponse {
+    #[prost(bool, tag = "1")]
+    pub removed: bool,
+    /// where the folder went; empty when `removed` is false
+    #[prost(string, tag = "2")]
+    pub moved_to: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ReposRequest {
+    /// absolute folders to scan under
+    #[prost(string, repeated, tag = "1")]
+    pub add_roots: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    #[prost(string, repeated, tag = "2")]
+    pub remove_roots: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// start a scan now
+    #[prost(bool, tag = "3")]
+    pub scan: bool,
+    /// with `scan`: answer when it has finished
+    #[prost(bool, tag = "4")]
+    pub wait: bool,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ReposResponse {
+    /// the scan roots after any change
+    #[prost(string, repeated, tag = "1")]
+    pub roots: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// when the last scan finished; 0 for never
+    #[prost(uint64, tag = "2")]
+    pub last_scan_ms: u64,
+    /// a scan is going now
+    #[prost(bool, tag = "3")]
+    pub running: bool,
+    /// repos the last finished scan found
+    #[prost(uint32, tag = "4")]
+    pub found: u32,
+    /// of those, how many it registered that were new
+    #[prost(uint32, tag = "5")]
+    pub registered: u32,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct MirrorsRetireRequest {
+    /// one mirror, or empty for every Remote mirror
+    #[prost(string, tag = "1")]
+    pub workspace_id: ::prost::alloc::string::String,
+    #[prost(bool, tag = "2")]
+    pub dry_run: bool,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RetiredMirror {
+    #[prost(string, tag = "1")]
+    pub workspace_id: ::prost::alloc::string::String,
+    /// the mirror's folder
+    #[prost(string, tag = "2")]
+    pub root: ::prost::alloc::string::String,
+    /// where it went (or would go, on a dry run)
+    #[prost(string, tag = "3")]
+    pub moved_to: ::prost::alloc::string::String,
+    /// the name it showed
+    #[prost(string, tag = "4")]
+    pub name: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MirrorsRetireResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub mirrors: ::prost::alloc::vec::Vec<RetiredMirror>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct DebugSetGroupKeyRequest {
@@ -1344,39 +1460,6 @@ impl FileKind {
         }
     }
 }
-/// Which side wins. `MERGED` keeps what is in the file and only clears the flag.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-#[repr(i32)]
-pub enum Resolution {
-    Unspecified = 0,
-    Mine = 1,
-    Theirs = 2,
-    Merged = 3,
-}
-impl Resolution {
-    /// String value of the enum field names used in the ProtoBuf definition.
-    ///
-    /// The values are not transformed in any way and thus are considered stable
-    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-    pub fn as_str_name(&self) -> &'static str {
-        match self {
-            Self::Unspecified => "RESOLUTION_UNSPECIFIED",
-            Self::Mine => "RESOLUTION_MINE",
-            Self::Theirs => "RESOLUTION_THEIRS",
-            Self::Merged => "RESOLUTION_MERGED",
-        }
-    }
-    /// Creates an enum from field names used in the ProtoBuf definition.
-    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-        match value {
-            "RESOLUTION_UNSPECIFIED" => Some(Self::Unspecified),
-            "RESOLUTION_MINE" => Some(Self::Mine),
-            "RESOLUTION_THEIRS" => Some(Self::Theirs),
-            "RESOLUTION_MERGED" => Some(Self::Merged),
-            _ => None,
-        }
-    }
-}
 /// How a device's last-known clock reading compares to ours (txtodo_model::Skew), shared by
 /// `txtodo device list` and `txtodo doctor`'s per-peer clock line.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -1413,6 +1496,40 @@ impl SkewStatus {
             "SKEW_STATUS_OK" => Some(Self::Ok),
             "SKEW_STATUS_BEHIND" => Some(Self::Behind),
             "SKEW_STATUS_AHEAD" => Some(Self::Ahead),
+            _ => None,
+        }
+    }
+}
+/// Which carrier syncs a workspace (task two-kinds-of-workspace, ADR 0043). Read off the root by the
+/// daemon, never stored.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum WorkspaceKind {
+    /// an older daemon: kind unknown, a client shows none
+    Unspecified = 0,
+    /// the default or a folder under `<data dir>/lists/`; txtodo syncs it
+    List = 1,
+    /// every other folder; git syncs it, txtodo never does
+    Repo = 2,
+}
+impl WorkspaceKind {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "WORKSPACE_KIND_UNSPECIFIED",
+            Self::List => "WORKSPACE_KIND_LIST",
+            Self::Repo => "WORKSPACE_KIND_REPO",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "WORKSPACE_KIND_UNSPECIFIED" => Some(Self::Unspecified),
+            "WORKSPACE_KIND_LIST" => Some(Self::List),
+            "WORKSPACE_KIND_REPO" => Some(Self::Repo),
             _ => None,
         }
     }
@@ -1713,7 +1830,9 @@ pub mod txtodo_client {
             req.extensions_mut().insert(GrpcMethod::new("txtodo.v1.Txtodo", "Health"));
             self.inner.unary(req, path, codec).await
         }
-        /// Open needs_review flags for a document (plan M4): two devices rewrote the same word.
+        /// A document's duplicate lines (ADR 0032). The needs_review flags it also listed, and
+        /// `ResolveConflict`, went with the Loro mirror (ADR 0038): an older client's call to
+        /// `ResolveConflict` now gets UNIMPLEMENTED.
         pub async fn list_conflicts(
             &mut self,
             request: impl tonic::IntoRequest<super::ConflictsRequest>,
@@ -1736,29 +1855,6 @@ pub mod txtodo_client {
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(GrpcMethod::new("txtodo.v1.Txtodo", "ListConflicts"));
-            self.inner.unary(req, path, codec).await
-        }
-        /// Resolves one flag: writes the chosen side back (mine/theirs) or keeps the file (merged),
-        /// and clears the flag — both or neither.
-        pub async fn resolve_conflict(
-            &mut self,
-            request: impl tonic::IntoRequest<super::ResolveRequest>,
-        ) -> std::result::Result<tonic::Response<super::ApplyResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
-            let codec = tonic_prost::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/txtodo.v1.Txtodo/ResolveConflict",
-            );
-            let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "ResolveConflict"));
             self.inner.unary(req, path, codec).await
         }
         /// notes.md for one task's ref: directory (plan M5, design §7). The daemon resolves the task
@@ -2061,6 +2157,37 @@ pub mod txtodo_client {
                 .insert(GrpcMethod::new("txtodo.v1.Txtodo", "WorkspaceRejoin"));
             self.inner.unary(req, path, codec).await
         }
+        /// Moves a Remote mirror into a folder (task spike-txtodo-should-merge-remote-workspa): the
+        /// folder's own copy, and the workspace registered there if any, move aside into a new
+        /// time-stamped folder beside it as for a rejoin (never deleted, never sent); then the mirror's
+        /// `.txtodo/` and documents move in, and the mirror's id now answers at that folder. Same store,
+        /// so nothing is re-sent. Refused (FAILED_PRECONDITION, nothing changed) unless `workspace_id` is
+        /// a Remote mirror, and for a folder that overlaps another workspace, sits under the data dir, or
+        /// is on another disk. Device-level, no selector.
+        pub async fn workspace_bind(
+            &mut self,
+            request: impl tonic::IntoRequest<super::WorkspaceBindRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::WorkspaceBindResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/WorkspaceBind",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "WorkspaceBind"));
+            self.inner.unary(req, path, codec).await
+        }
         /// Sets or clears the name every paired device shows for a workspace (task
         /// workspace-vanity-name): the `name` line of its `txtodo.toml`, written as ops, so it syncs.
         /// Returns the workspace, showing the new name. INVALID_ARGUMENT for a bad name, NOT_FOUND for an
@@ -2085,6 +2212,133 @@ pub mod txtodo_client {
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(GrpcMethod::new("txtodo.v1.Txtodo", "WorkspaceRename"));
+            self.inner.unary(req, path, codec).await
+        }
+        /// Makes the list `name` when this device has none by that name and registers it under the id the
+        /// name gives; a list that is already there is returned unchanged (`created` false).
+        /// INVALID_ARGUMENT for a bad name, ALREADY_EXISTS when that id is a list renamed to another name.
+        pub async fn list_ensure(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ListEnsureRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListEnsureResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/ListEnsure",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "ListEnsure"));
+            self.inner.unary(req, path, codec).await
+        }
+        /// Changes the name a list shows (the `WorkspaceRename` write); its id and folder stay.
+        /// INVALID_ARGUMENT for a bad name, NOT_FOUND for an unknown list, ALREADY_EXISTS when another
+        /// list shows or was made under the new name.
+        pub async fn list_rename(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ListRenameRequest>,
+        ) -> std::result::Result<tonic::Response<super::WorkspaceInfo>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/ListRename",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "ListRename"));
+            self.inner.unary(req, path, codec).await
+        }
+        /// Un-registers a list on this device and moves its folder into a time-stamped sibling; never
+        /// deletes, never tells the other devices, which keep the list. FAILED_PRECONDITION for the
+        /// default list, NOT_FOUND for an unknown one.
+        pub async fn list_remove(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ListRemoveRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListRemoveResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/ListRemove",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "ListRemove"));
+            self.inner.unary(req, path, codec).await
+        }
+        /// The folders the daemon scans for repos, and the scan itself. `add_roots` and `remove_roots`
+        /// change the roots first (INVALID_ARGUMENT for a root that is not an absolute path); `scan` then
+        /// starts a scan of them now, in the background unless `wait`. All empty reads the state. The roots
+        /// and when the last scan finished come back.
+        pub async fn repos(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ReposRequest>,
+        ) -> std::result::Result<tonic::Response<super::ReposResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/txtodo.v1.Txtodo/Repos");
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new("txtodo.v1.Txtodo", "Repos"));
+            self.inner.unary(req, path, codec).await
+        }
+        /// Moves each Remote mirror of a workspace that is now a repo aside, into a time-stamped sibling
+        /// of its folder (never deleted, never sent), and un-registers it. `dry_run` changes nothing. A
+        /// mirror still being filled by a peer is the same as any other: its copy moves.
+        pub async fn mirrors_retire(
+            &mut self,
+            request: impl tonic::IntoRequest<super::MirrorsRetireRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::MirrorsRetireResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/MirrorsRetire",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "MirrorsRetire"));
             self.inner.unary(req, path, codec).await
         }
         /// Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
@@ -2593,7 +2847,9 @@ pub mod txtodo_server {
             &self,
             request: tonic::Request<super::HealthRequest>,
         ) -> std::result::Result<tonic::Response<super::HealthResponse>, tonic::Status>;
-        /// Open needs_review flags for a document (plan M4): two devices rewrote the same word.
+        /// A document's duplicate lines (ADR 0032). The needs_review flags it also listed, and
+        /// `ResolveConflict`, went with the Loro mirror (ADR 0038): an older client's call to
+        /// `ResolveConflict` now gets UNIMPLEMENTED.
         async fn list_conflicts(
             &self,
             request: tonic::Request<super::ConflictsRequest>,
@@ -2601,12 +2857,6 @@ pub mod txtodo_server {
             tonic::Response<super::ConflictsResponse>,
             tonic::Status,
         >;
-        /// Resolves one flag: writes the chosen side back (mine/theirs) or keeps the file (merged),
-        /// and clears the flag — both or neither.
-        async fn resolve_conflict(
-            &self,
-            request: tonic::Request<super::ResolveRequest>,
-        ) -> std::result::Result<tonic::Response<super::ApplyResponse>, tonic::Status>;
         /// notes.md for one task's ref: directory (plan M5, design §7). The daemon resolves the task
         /// to its ref dir; the client never resolves a slug or touches the filesystem itself.
         async fn get_notes(
@@ -2707,6 +2957,20 @@ pub mod txtodo_server {
             tonic::Response<super::WorkspaceRejoinResponse>,
             tonic::Status,
         >;
+        /// Moves a Remote mirror into a folder (task spike-txtodo-should-merge-remote-workspa): the
+        /// folder's own copy, and the workspace registered there if any, move aside into a new
+        /// time-stamped folder beside it as for a rejoin (never deleted, never sent); then the mirror's
+        /// `.txtodo/` and documents move in, and the mirror's id now answers at that folder. Same store,
+        /// so nothing is re-sent. Refused (FAILED_PRECONDITION, nothing changed) unless `workspace_id` is
+        /// a Remote mirror, and for a folder that overlaps another workspace, sits under the data dir, or
+        /// is on another disk. Device-level, no selector.
+        async fn workspace_bind(
+            &self,
+            request: tonic::Request<super::WorkspaceBindRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::WorkspaceBindResponse>,
+            tonic::Status,
+        >;
         /// Sets or clears the name every paired device shows for a workspace (task
         /// workspace-vanity-name): the `name` line of its `txtodo.toml`, written as ops, so it syncs.
         /// Returns the workspace, showing the new name. INVALID_ARGUMENT for a bad name, NOT_FOUND for an
@@ -2716,6 +2980,51 @@ pub mod txtodo_server {
             &self,
             request: tonic::Request<super::WorkspaceRenameRequest>,
         ) -> std::result::Result<tonic::Response<super::WorkspaceInfo>, tonic::Status>;
+        /// Makes the list `name` when this device has none by that name and registers it under the id the
+        /// name gives; a list that is already there is returned unchanged (`created` false).
+        /// INVALID_ARGUMENT for a bad name, ALREADY_EXISTS when that id is a list renamed to another name.
+        async fn list_ensure(
+            &self,
+            request: tonic::Request<super::ListEnsureRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListEnsureResponse>,
+            tonic::Status,
+        >;
+        /// Changes the name a list shows (the `WorkspaceRename` write); its id and folder stay.
+        /// INVALID_ARGUMENT for a bad name, NOT_FOUND for an unknown list, ALREADY_EXISTS when another
+        /// list shows or was made under the new name.
+        async fn list_rename(
+            &self,
+            request: tonic::Request<super::ListRenameRequest>,
+        ) -> std::result::Result<tonic::Response<super::WorkspaceInfo>, tonic::Status>;
+        /// Un-registers a list on this device and moves its folder into a time-stamped sibling; never
+        /// deletes, never tells the other devices, which keep the list. FAILED_PRECONDITION for the
+        /// default list, NOT_FOUND for an unknown one.
+        async fn list_remove(
+            &self,
+            request: tonic::Request<super::ListRemoveRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListRemoveResponse>,
+            tonic::Status,
+        >;
+        /// The folders the daemon scans for repos, and the scan itself. `add_roots` and `remove_roots`
+        /// change the roots first (INVALID_ARGUMENT for a root that is not an absolute path); `scan` then
+        /// starts a scan of them now, in the background unless `wait`. All empty reads the state. The roots
+        /// and when the last scan finished come back.
+        async fn repos(
+            &self,
+            request: tonic::Request<super::ReposRequest>,
+        ) -> std::result::Result<tonic::Response<super::ReposResponse>, tonic::Status>;
+        /// Moves each Remote mirror of a workspace that is now a repo aside, into a time-stamped sibling
+        /// of its folder (never deleted, never sent), and un-registers it. `dry_run` changes nothing. A
+        /// mirror still being filled by a peer is the same as any other: its copy moves.
+        async fn mirrors_retire(
+            &self,
+            request: tonic::Request<super::MirrorsRetireRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::MirrorsRetireResponse>,
+            tonic::Status,
+        >;
         /// Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
         async fn pair_offer(
             &self,
@@ -3351,49 +3660,6 @@ pub mod txtodo_server {
                     };
                     Box::pin(fut)
                 }
-                "/txtodo.v1.Txtodo/ResolveConflict" => {
-                    #[allow(non_camel_case_types)]
-                    struct ResolveConflictSvc<T: Txtodo>(pub Arc<T>);
-                    impl<T: Txtodo> tonic::server::UnaryService<super::ResolveRequest>
-                    for ResolveConflictSvc<T> {
-                        type Response = super::ApplyResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::ResolveRequest>,
-                        ) -> Self::Future {
-                            let inner = Arc::clone(&self.0);
-                            let fut = async move {
-                                <T as Txtodo>::resolve_conflict(&inner, request).await
-                            };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let method = ResolveConflictSvc(inner);
-                        let codec = tonic_prost::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            )
-                            .apply_max_message_size_config(
-                                max_decoding_message_size,
-                                max_encoding_message_size,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
                 "/txtodo.v1.Txtodo/GetNotes" => {
                     #[allow(non_camel_case_types)]
                     struct GetNotesSvc<T: Txtodo>(pub Arc<T>);
@@ -3930,6 +4196,51 @@ pub mod txtodo_server {
                     };
                     Box::pin(fut)
                 }
+                "/txtodo.v1.Txtodo/WorkspaceBind" => {
+                    #[allow(non_camel_case_types)]
+                    struct WorkspaceBindSvc<T: Txtodo>(pub Arc<T>);
+                    impl<
+                        T: Txtodo,
+                    > tonic::server::UnaryService<super::WorkspaceBindRequest>
+                    for WorkspaceBindSvc<T> {
+                        type Response = super::WorkspaceBindResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::WorkspaceBindRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::workspace_bind(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = WorkspaceBindSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
                 "/txtodo.v1.Txtodo/WorkspaceRename" => {
                     #[allow(non_camel_case_types)]
                     struct WorkspaceRenameSvc<T: Txtodo>(pub Arc<T>);
@@ -3960,6 +4271,223 @@ pub mod txtodo_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = WorkspaceRenameSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/ListEnsure" => {
+                    #[allow(non_camel_case_types)]
+                    struct ListEnsureSvc<T: Txtodo>(pub Arc<T>);
+                    impl<T: Txtodo> tonic::server::UnaryService<super::ListEnsureRequest>
+                    for ListEnsureSvc<T> {
+                        type Response = super::ListEnsureResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ListEnsureRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::list_ensure(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ListEnsureSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/ListRename" => {
+                    #[allow(non_camel_case_types)]
+                    struct ListRenameSvc<T: Txtodo>(pub Arc<T>);
+                    impl<T: Txtodo> tonic::server::UnaryService<super::ListRenameRequest>
+                    for ListRenameSvc<T> {
+                        type Response = super::WorkspaceInfo;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ListRenameRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::list_rename(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ListRenameSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/ListRemove" => {
+                    #[allow(non_camel_case_types)]
+                    struct ListRemoveSvc<T: Txtodo>(pub Arc<T>);
+                    impl<T: Txtodo> tonic::server::UnaryService<super::ListRemoveRequest>
+                    for ListRemoveSvc<T> {
+                        type Response = super::ListRemoveResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ListRemoveRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::list_remove(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ListRemoveSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/Repos" => {
+                    #[allow(non_camel_case_types)]
+                    struct ReposSvc<T: Txtodo>(pub Arc<T>);
+                    impl<T: Txtodo> tonic::server::UnaryService<super::ReposRequest>
+                    for ReposSvc<T> {
+                        type Response = super::ReposResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ReposRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::repos(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ReposSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/MirrorsRetire" => {
+                    #[allow(non_camel_case_types)]
+                    struct MirrorsRetireSvc<T: Txtodo>(pub Arc<T>);
+                    impl<
+                        T: Txtodo,
+                    > tonic::server::UnaryService<super::MirrorsRetireRequest>
+                    for MirrorsRetireSvc<T> {
+                        type Response = super::MirrorsRetireResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::MirrorsRetireRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::mirrors_retire(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = MirrorsRetireSvc(inner);
                         let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

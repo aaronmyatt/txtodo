@@ -103,6 +103,9 @@ const SELECT_ACTIVE: &str = "SELECT id, root, added_at, removed_at, last_active_
      WHERE removed_at IS NULL ORDER BY added_at, id LIMIT ?1";
 const TOUCH: &str =
     "UPDATE workspaces SET last_active_ms = ?2 WHERE id = ?1 AND removed_at IS NULL";
+const SET_ROOT: &str = "UPDATE workspaces SET root = ?2 WHERE id = ?1 AND removed_at IS NULL";
+const RESTORE: &str = "UPDATE workspaces SET removed_at = NULL, added_at = ?2, \
+     last_active_ms = NULL WHERE id = ?1 AND removed_at IS NOT NULL";
 const SELECT_FOR_REMOVE: &str = "SELECT root, added_at FROM workspaces WHERE id = ?1";
 const UPSERT_REMOVE: &str = "INSERT INTO workspaces (id, root, added_at, removed_at) \
      VALUES (?1, ?2, ?3, ?4) \
@@ -127,7 +130,7 @@ fn row_of(raw: RawRow) -> Result<WorkspaceRow, StoreError> {
 /// `oplog.db`. `txtodo-daemon`'s `workspace_registry.rs` decides where that file lives and owns
 /// id minting and the idempotent add/remove/list semantics; this type is only the raw rows.
 pub struct Registry {
-    conn: Connection,
+    pub(crate) conn: Connection,
 }
 
 impl Registry {
@@ -160,6 +163,8 @@ impl Registry {
             REGISTRY_MIGRATIONS.last().map(|m| m.0),
             Some(REGISTRY_SCHEMA_VERSION)
         );
+        crate::registry_scan::create_tables(&conn)
+            .map_err(StoreError::sqlite("create scan tables", path))?;
         Ok(Registry { conn })
     }
 
@@ -185,6 +190,25 @@ impl Registry {
             .map_err(StoreError::query("select workspace by root"))?
             .map(row_of)
             .transpose()
+    }
+
+    /// Whether a row for `root` was removed and no row for it is active: a folder the person took
+    /// off the registry. The repo scan (task two-kinds-of-workspace) leaves such a folder alone, so
+    /// a removal sticks.
+    pub fn root_was_removed(&self, root: &str) -> Result<bool, StoreError> {
+        if self.find_active_by_root(root)?.is_some() {
+            return Ok(false);
+        }
+        let removed = self
+            .conn
+            .query_row(
+                "SELECT 1 FROM workspaces WHERE root = ?1 AND removed_at IS NOT NULL LIMIT 1",
+                params![root],
+                |_| Ok(()),
+            )
+            .optional()
+            .map_err(StoreError::query("select removed root"))?;
+        Ok(removed.is_some())
     }
 
     /// One workspace by id, active or removed.
@@ -222,6 +246,32 @@ impl Registry {
             .conn
             .execute(TOUCH, params![id_blob(id), wall_i64(at_ms)])
             .map_err(StoreError::query("touch workspace"))?;
+        Ok(changed > 0)
+    }
+
+    /// Points the active row `id` at `root` (task spike-txtodo-should-merge-remote-workspa: a
+    /// Remote mirror bound into a folder keeps its id, only its root moves). `false` for an
+    /// unknown or removed id. The unique partial index on active roots refuses a root another
+    /// active row holds, so the caller removes that row first. Never touches either folder.
+    pub fn set_root(&mut self, id: WorkspaceId, root: &str) -> Result<bool, StoreError> {
+        let changed = self
+            .conn
+            .execute(SET_ROOT, params![id_blob(id), root])
+            .map_err(StoreError::query("set workspace root"))?;
+        Ok(changed > 0)
+    }
+
+    /// Brings a removed row back (task two-kinds-of-workspace): clears `removed_at` and stamps
+    /// `added_at` with `at_ms`, keeping the id and the root. A named list's id comes from its name,
+    /// so a list removed on this device and made again must come back under the same id; a fresh
+    /// row cannot, since the id is the primary key. `false` for an unknown id or one that is
+    /// active. The unique partial index on active roots refuses a root another active row holds,
+    /// so the caller checks [`Registry::find_active_by_root`] first.
+    pub fn restore(&mut self, id: WorkspaceId, at_ms: u64) -> Result<bool, StoreError> {
+        let changed = self
+            .conn
+            .execute(RESTORE, params![id_blob(id), wall_i64(at_ms)])
+            .map_err(StoreError::query("restore workspace"))?;
         Ok(changed > 0)
     }
 

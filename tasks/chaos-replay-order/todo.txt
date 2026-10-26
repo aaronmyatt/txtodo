@@ -1,0 +1,3 @@
+x 2026-10-11 2026-10-11 Parked group split across the log applies whole (cause 1) +m11 @daemon — e6911a86
+x 2026-10-11 2026-10-11 Unit test: the 92-op late-older-move + blank insert/eraser case renders the same in both orders +m11 @daemon @test — src/testdata/chaos_split_group_blank.json, ignored test + a guard that it still differs
+x 2026-10-11 2026-10-11 Fix: a blank anchored after a task settles the same whether the task's older move lands before or after it (state_rehome / state_erase) +m11 @daemon — rehome blocks last-first (state_rehome.rs)

@@ -168,6 +168,7 @@ async fn a_dry_run_that_holds_a_move_is_refused_and_writes_nothing() {
         id: ids[2].clone(),
         before: Some(ids[0].clone()),
         after: None,
+        to_file: None,
     });
     let err = mcp.batch(batch, true, None).await.unwrap_err();
     assert_eq!(err.code, "invalid_params", "{err:?}");

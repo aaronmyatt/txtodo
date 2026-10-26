@@ -113,12 +113,12 @@ pub struct LintFinding {
     pub finding: String,
 }
 
-/// One duplicate group (`todo_conflicts_list`, ADR 0032): two or more tasks in one file whose
-/// whole lines are the same bytes. Fixed with `todo_delete` on every copy but one, or by editing
-/// one copy so they differ. Same-word review flags went with the todo.txt mirror (ADR 0038).
+/// Lines of one file that read the same (`todo_conflicts_list`, ADR 0032): the copies, oldest task
+/// id first, so the last is the newest. Fix one with `todo_delete` on the other copies, or edit one
+/// so they differ. (The merge-conflict flags this tool listed went with the Loro mirror, ADR 0038.)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DuplicateGroup {
-    /// The copies, oldest id first (ULIDs sort by mint time): the last is the newest.
+    /// The copies, oldest first.
     pub copies: Vec<DuplicateCopy>,
 }
 
@@ -127,7 +127,7 @@ pub struct DuplicateGroup {
 pub struct DuplicateCopy {
     /// The task's id.
     pub id: TaskId,
-    /// The 1-based line it sits on now, blank lines counted.
+    /// The 1-based line it sits on now.
     pub line: u32,
 }
 
@@ -159,6 +159,12 @@ pub struct WorkspaceInfo {
     /// Display only, never a `workspace` arg. Empty from a daemon older than the field.
     #[serde(default)]
     pub name: String,
+    /// Whether txtodo syncs it between the user's own devices as a named list (task
+    /// two-kinds-of-workspace): the default or a folder in the lists root. `false` for every
+    /// other folder (a repo, which git syncs) and from a daemon older than the field. Only a
+    /// workspace with this set answers to a tool's `list` argument.
+    #[serde(default)]
+    pub is_list: bool,
 }
 
 /// The seam every MCP tool/resource/prompt calls through (mcp-server-tools notes.md). Schemas
@@ -274,7 +280,7 @@ pub trait McpBackend: Send + Sync {
         file: Option<RefPath>,
         workspace: WorkspaceArg,
     ) -> Result<Vec<LintFinding>, McpError>;
-    /// `todo_conflicts_list` → daemon gRPC `ListConflicts`' duplicate groups.
+    /// `todo_conflicts_list` → daemon gRPC `ListConflicts`: the file's duplicate groups.
     async fn conflicts_list(
         &self,
         file: Option<RefPath>,

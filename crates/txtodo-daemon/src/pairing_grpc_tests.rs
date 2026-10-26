@@ -188,6 +188,7 @@ pub(crate) async fn finalize_after_both_confirm(
             .try_finalize_initiator(
                 ws.workspace().key_store().as_ref(),
                 ws.workspace().device_static_public(),
+                ws.workspace().group_epoch(),
                 now_ms,
             )
             .unwrap()
@@ -246,6 +247,46 @@ async fn full_round_trip_converges_only_after_both_sides_confirm() {
         group,
         "the joiner adopted the group it joined"
     );
+}
+
+/// Task `peer-prune`: after a rotation the initiator hands over its **current** epoch's key and the
+/// epoch itself, and the joiner files it there and takes that epoch. Epoch 0's key, which a removed
+/// device may still hold, is not what a new device gets.
+#[tokio::test]
+async fn a_joiner_is_handed_the_initiators_current_epoch_not_epoch_zero() {
+    let dir_a = tempfile::tempdir().unwrap();
+    let dir_b = tempfile::tempdir().unwrap();
+    let clock = Arc::new(FakeClock::new(1_000));
+    let a = service(dir_a.path(), Arc::clone(&clock));
+    let b = service(dir_b.path(), Arc::clone(&clock));
+    let now_ms = clock.now_ms();
+    // A has rotated twice: epoch 2 holds a key that is not epoch 0's.
+    {
+        let workspace = a.workspace();
+        let keys = workspace.key_store();
+        keys.put(KeyId::Group(0), &txtodo_sync::Secret::new(vec![1; 32]))
+            .unwrap();
+        keys.put(KeyId::Group(2), &txtodo_sync::Secret::new(vec![9; 32]))
+            .unwrap();
+        workspace.set_group_epoch(2);
+    }
+
+    handshake_and_confirm(&a, &b, now_ms).await;
+    finalize_after_both_confirm(&a, &b, now_ms).await;
+
+    assert_eq!(b.workspace().group_epoch(), 2, "the joiner takes the epoch");
+    let held = b.workspace().key_store().get(KeyId::Group(2)).unwrap();
+    assert_eq!(held.unwrap().expose(), &[9; 32][..]);
+    let old = b.workspace().key_store().get(KeyId::Group(0)).unwrap();
+    assert!(old.is_none(), "the old key was not handed over");
+    let rows = b
+        .workspace()
+        .identity_store()
+        .lock()
+        .unwrap()
+        .list_devices();
+    let initiator = rows.unwrap().into_iter().next().unwrap();
+    assert_eq!(initiator.key_epoch, 2, "and records the initiator on it");
 }
 
 /// The p2p lab's pairing finding: the joiner's one relay endpoint is bound at boot under its own
@@ -325,6 +366,7 @@ async fn one_sided_confirmation_lands_no_key_on_either_side() {
         .try_finalize_initiator(
             a.workspace().key_store().as_ref(),
             a.workspace().device_static_public(),
+            a.workspace().group_epoch(),
             now_ms,
         )
         .unwrap();

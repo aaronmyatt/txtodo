@@ -16,7 +16,9 @@ screen's as-built notes are in `tasks/tui-revamp/*/notes.md`.
   (screen, focus, overlay), `state_shell` (workspace, search text, `W` menu, link, banners,
   toasts, the change stack `u` and Undo use), `state_tasks` (ref badges), `state_detail` (the
   panel's levels; `with_sub_list` swaps a sub-list in so list mode runs on it unchanged),
-  `state_universal`, `state_settings`. `AppState::fixture()` for tests.
+  `state_universal`, `state_settings`. `AppState::fixture()` for tests. `list_picker` (`m`/`c`,
+  task add-the-ability-to-move-or-copy-a-task-t): the popup over the workspace's other lists;
+  Enter sends the daemon's cross-file `Move` (not on `u`'s stack) or an `Add` of the copy.
 - Drawing: `ui::screen::draw` composes header, banners, the screen, the prompt bar, the footer,
   toasts and popups, and returns the `HitMap`. One module per part under `ui/`; `paint` and
   `theme` colour tokens (desktop's palette as RGB, or a 16-colour table by hue).
@@ -33,6 +35,18 @@ screen's as-built notes are in `tasks/tui-revamp/*/notes.md`.
   real-daemon tests are in the `test = false` `tests/e2e` target: run them with
   `TXTODO_TEST_KEYSTORE_MEMORY=1 TXTODO_NO_AUTOSTART=1 cargo nextest run -p txtodo-tui
   --test e2e`.
+
+- Named lists (task two-kinds-of-workspace, ADR 0043): `state_shell::WsKind` (list, repo, or unknown
+  from an older daemon) rides on `MenuItem` and `WsRow` from `WorkspaceInfo.kind`. The `W` popup and
+  Settings › Workspaces put lists first and tag each row `list` or `repo`. Settings › Workspaces has a
+  `New list` field row (`ListEnsure`); removing a list there is `ListRemove` (its folder moves aside,
+  the other devices keep it) and renaming the open one is `ListRename`, found by the folder name it
+  was made under; any other workspace keeps `WorkspaceRemove` / `WorkspaceRename`. Manifest
+  `workspace.new_list`.
+- Pruning (task `peer-prune`, ADR 0044): Settings › Devices lists a device the group dropped (pruned, or dropped
+  by another device) as an info row with why, no revoke, and a `Dropped from the group` banner row while
+  `Health.dropped_from_group` is set (`DeviceRow.dropped`, `SettingsView.dropped_from_group`, `app_settings.rs`).
+  A device removed by hand stays hidden, as before.
 
 ## Parity
 `specs/client-parity.toml` is the one list of user-facing actions and where this client and the

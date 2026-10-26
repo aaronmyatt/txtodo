@@ -16,8 +16,11 @@ pub(crate) fn basename(path: &FilePath) -> &str {
 }
 
 /// Loads this workspace's identity mode from `meta`, or mints `default` (`txtodod
-/// --identity-mode`, itself `Sidecar` by default — ADR 0019, a plain todo.txt needs no `id:` tags
-/// written into it). Fixed for the workspace's lifetime once minted, like the device/group id.
+/// --identity-mode`, itself `Sidecar`: ADR 0019). Fixed for the workspace's lifetime once minted,
+/// like the device/group id. A new workspace used to mint `Tagged` when any of its lists already
+/// carried an `id:` tag, and Tagged stamps `id:` into every line: registering an old checkout of
+/// a backlog rewrote ~120 lists (task cli-no-implicit-register). The `id:` text a line still
+/// carries is kept as it is, never added to.
 pub(crate) fn load_or_mint_identity_mode(
     store: &mut Store,
     default: IdentityMode,
@@ -27,9 +30,6 @@ pub(crate) fn load_or_mint_identity_mode(
     {
         return Ok(mode);
     }
-    // Never Tagged because a file carries an `id:` tag (ADR 0019, tasks/cli-no-implicit-register):
-    // a repo whose backlog held a few was made Tagged and got one stamped into every line. Tags
-    // already in the text stay as text until `txtodo identity migrate` strips them.
     store.meta_set(IDENTITY_MODE_KEY, &encode_identity_mode(default))?;
     Ok(default)
 }

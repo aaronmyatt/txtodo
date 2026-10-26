@@ -1,16 +1,26 @@
 //! `banner.rs`'s tests: which banners a state calls for, and where their buttons land.
 
 use super::*;
+use crate::state::{DuplicateCopy, DuplicateGroup};
 use crate::state_shell::Refused;
+
+/// One duplicate group on lines 1 and 2, for the review banner.
+fn with_group(state: &mut AppState) {
+    let copy = |n: u32| DuplicateCopy {
+        task_id: format!("01J9K3H5Z7Q8X2M4N6P8R0T2V{n}"),
+        line_number: n,
+    };
+    state.duplicates.push(DuplicateGroup {
+        copies: vec![copy(1), copy(2)],
+    });
+}
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 
 #[test]
 fn banners_come_most_urgent_first() {
     let mut state = AppState::fixture();
-    state
-        .duplicates
-        .push(crate::state::DuplicateGroup::default());
+    with_group(&mut state);
     assert_eq!(banners(&state)[0].label, "1 line is in the file twice");
     state.shell.link = Link::Connecting;
     state.shell.refused = Some(Refused {
@@ -35,6 +45,7 @@ fn banners_come_most_urgent_first() {
 #[test]
 fn buttons_sit_at_the_right_edge_and_run_their_commands() {
     let mut state = AppState::fixture();
+    with_group(&mut state);
     state.shell.link = Link::Down;
     state
         .duplicates

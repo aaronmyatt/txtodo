@@ -138,7 +138,8 @@ impl DaemonClient {
             .connect_timeout(CONNECT_TIMEOUT);
         let channel = endpoint.connect_lazy();
         Ok(DaemonClient {
-            inner: pb::txtodo_client::TxtodoClient::new(channel),
+            inner: pb::txtodo_client::TxtodoClient::new(channel)
+                .max_decoding_message_size(txtodo_proto::MAX_MESSAGE_BYTES),
             sock: sock.to_path_buf(),
             selector,
         })
@@ -214,6 +215,9 @@ impl DaemonClient {
         let req = pb::WatchRequest {
             paths,
             workspace: self.selector.clone(),
+            // The desktop shows its own notices (`notify.rs`), so the daemon holds its own while
+            // this stream is open (ADR 0041); the Settings toggle off means quiet from both.
+            shows_notices: true,
         };
         Ok(self.inner.watch(req).await?.into_inner())
     }
@@ -236,8 +240,7 @@ impl DaemonClient {
         Ok(self.inner.history(req).await?.into_inner())
     }
 
-    /// `ListConflicts` for `path`; only its duplicate groups are read (ADR 0032). Same-word review
-    /// went with the todo.txt mirror (ADR 0038).
+    /// `ListConflicts` for `path`: its duplicate groups (ADR 0032; no flags since ADR 0038).
     pub async fn list_conflicts(
         &mut self,
         path: &str,

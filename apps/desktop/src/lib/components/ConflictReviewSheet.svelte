@@ -1,16 +1,16 @@
 <script lang="ts">
-	// Conflict review sheet (plan M7; design §4.7 conflict table; plan §3.3 keyboard/a11y floor:
-	// "popover traps focus"). A native `role="dialog"` with a hand-rolled focus trap — no new
-	// dependency for it since the trap is ~15 lines (this task takes no new npm dependencies).
+	// Duplicate review sheet (ADR 0032; plan §3.3 keyboard/a11y floor: "popover traps focus").
+	// The `needs_review` flags it also reviewed went with the Loro mirror (ADR 0038, A). A native
+	// `role="dialog"` with a hand-rolled focus trap — no new dependency for it since the trap is
+	// ~15 lines (this task takes no new npm dependencies).
 	// Ref (dialog pattern incl. focus trap + Escape): https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/
 	import { onDestroy, onMount, tick } from "svelte";
 	import { applyMutations, type DuplicateGroup } from "$lib/daemon";
 	import { copiesLabel, keepMutations, type KeepChoice } from "$lib/stores/duplicates";
 
-	// The file's duplicate groups (ADR 0032), first group first. Keeping one copy deletes the
-	// others through an ordinary `applyMutations`, then `onGroupResolved` re-reads the groups (the
-	// daemon derives them; nothing here to remove). Same-word review went with the todo.txt mirror
-	// (ADR 0038).
+	// One group at a time, the first. Keeping one copy deletes the others through an ordinary
+	// `applyMutations`, then `onGroupResolved` re-reads the groups (the daemon derives them), which
+	// shrinks `groups` and moves on to the next.
 	let {
 		path,
 		groups,

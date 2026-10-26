@@ -20,9 +20,10 @@ use std::sync::Arc;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
-    CallToolResult, GetPromptRequestParams, GetPromptResponse, ListPromptsResult,
-    ListResourceTemplatesResult, ListResourcesResult, PaginatedRequestParams,
-    ReadResourceRequestParams, ReadResourceResponse, ServerCapabilities, ServerInfo,
+    CallToolRequestParams, CallToolResponse, CallToolResult, GetPromptRequestParams,
+    GetPromptResponse, ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult,
+    PaginatedRequestParams, ReadResourceRequestParams, ReadResourceResponse, ServerCapabilities,
+    ServerInfo,
 };
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData, RoleServer, ServerHandler, tool, tool_handler, tool_router};
@@ -40,16 +41,23 @@ use crate::{prompts, resources, tools_read, tools_write};
 /// is the only thing behind them").
 #[derive(Clone)]
 pub struct McpServer {
-    backend: Arc<dyn McpBackend>,
-    tool_router: ToolRouter<McpServer>,
+    pub(crate) backend: Arc<dyn McpBackend>,
+    pub(crate) tool_router: ToolRouter<McpServer>,
+    /// Appended to a result whose call named no `workspace` (`fallback.rs`).
+    pub(crate) fallback_note: Option<Arc<str>>,
 }
 
 impl McpServer {
     /// Wraps `backend` behind every §6.3 tool and §6.4 resource/prompt.
     pub fn new(backend: Arc<dyn McpBackend>) -> McpServer {
+        let mut tool_router = Self::tool_router();
+        for route in tool_router.map.values_mut() {
+            crate::list_param::add_to_schema(&mut route.attr);
+        }
         McpServer {
             backend,
-            tool_router: Self::tool_router(),
+            tool_router,
+            fallback_note: None,
         }
     }
 }
@@ -167,7 +175,7 @@ impl McpServer {
         fields(tool = "todo_move", principal = %self.backend.principal())
     )]
     #[tool(
-        description = "Reorder a task immediately before or after another task in the same file."
+        description = "Reorder a task immediately before or after another task in the same file, or move it to the end of another list with `to_file` (e.g. `tasks/trip/todo.txt`): it keeps its id, notes and sub-list. To copy a task instead, read it with todo_get and todo_add its text with `file` (drop its `ref:` so the notes stay with the original)."
     )]
     pub async fn todo_move(
         &self,
@@ -199,7 +207,7 @@ impl McpServer {
         fields(tool = "todo_conflicts_list", principal = %self.backend.principal())
     )]
     #[tool(
-        description = "List duplicate lines (two or more tasks whose whole lines are the same): each group's copies, oldest first. Fix with todo_delete on all but one, or edit one."
+        description = "List the file's duplicate lines (lines that read the same): each group's copies, oldest first. Fix one with todo_delete on the other copies."
     )]
     pub async fn todo_conflicts_list(
         &self,
@@ -323,6 +331,16 @@ impl ServerHandler for McpServer {
                 .enable_prompts()
                 .build(),
         )
+    }
+
+    /// What `#[tool_handler]` writes for `call_tool` (it skips a method defined here), plus the
+    /// `list` argument and the fallback note (`list_param.rs`, `fallback.rs`).
+    async fn call_tool(
+        &self,
+        request: CallToolRequestParams,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResponse, ErrorData> {
+        crate::list_param::call(self, request, context).await
     }
 
     async fn list_resources(

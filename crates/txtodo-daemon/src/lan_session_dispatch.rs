@@ -10,15 +10,18 @@ use std::sync::Arc;
 use tokio::runtime::Handle;
 use txtodo_model::DeviceId;
 use txtodo_store::WorkspaceId;
-use txtodo_sync::{
-    DeviceSigningKey, GroupId, GroupKey, GroupKeys, Link, Session, derive_group_op_signing_key,
-    peek_workspace,
-};
+use txtodo_sync::{DeviceSigningKey, GroupId, GroupKeys, Link, Session, peek_workspace};
 
 use crate::clock::SystemClock;
 use crate::device_relay::{WorkspaceRoute, WorkspaceRoutes};
-use crate::lan_session::{fetch_group_key, read, read_heads, single_epoch_keys};
+use crate::group_epoch::EpochKey;
+use crate::lan_session::{fetch_group_key, read, read_heads, retained_keys};
 use crate::lan_session_live::{Live, POLL, PushCtx};
+use crate::lan_session_log::{
+    log_frame_too_short_to_peek, log_no_group_key, log_no_routed_workspace,
+    log_own_devices_changed, log_removed_peer_refused, log_routes_changed,
+    log_unrouted_workspace_skipped,
+};
 use crate::lan_session_shared::{
     LINK_WORKSPACE, MAX_MESSAGES_PER_SESSION, SessionCtx, handle_link_hello,
     handle_workspace_message, open_and_decode_logged, send_message,
@@ -35,7 +38,9 @@ struct SharedCtx<'a> {
     generation: u64,
     rt: Handle,
     group: GroupId,
-    key: GroupKey,
+    /// What this session seals under: the device's current epoch when it started.
+    key: EpochKey,
+    /// Every epoch up to it that the device holds: what incoming frames open under.
     keys: GroupKeys,
     signing_key: DeviceSigningKey,
     /// Every workspace open on this device when the session started; the session itself carries
@@ -44,9 +49,10 @@ struct SharedCtx<'a> {
     live_peers: LivePeers,
     /// `live_peers.own_generation()` when the session started (ADR 0029's amendment).
     own_at: u64,
-    device: DeviceId,
     /// What this connection runs over.
     carrier: Carrier,
+    /// The device-wide identity, to refuse a peer this device removed.
+    identity: Arc<crate::device_identity::DeviceIdentity>,
 }
 
 /// The per-connection state every frame updates: the protocol `Session`, the push/liveness
@@ -77,14 +83,6 @@ fn any_route_now_ms(routes: &BTreeMap<WorkspaceId, WorkspaceRoute>) -> u64 {
         .unwrap_or(0)
 }
 
-fn log_frame_too_short_to_peek() {
-    tracing::debug!("lan_session_frame_too_short_to_peek");
-}
-
-fn log_unrouted_workspace_skipped(workspace: WorkspaceId) {
-    tracing::debug!(%workspace, "lan_session_unrouted_workspace_message_skipped");
-}
-
 /// The link-level `Hello` branch of [`dispatch_frame`] — split out purely to keep that
 /// function's own cognitive complexity under this workspace's budget (`clippy.toml`).
 fn dispatch_link_frame(
@@ -93,7 +91,7 @@ fn dispatch_link_frame(
     shared: &SharedCtx<'_>,
     conn: &mut Conn,
 ) -> Option<()> {
-    let msg = open_and_decode_logged(frame, shared.group, LINK_WORKSPACE, &shared.keys)
+    let (msg, _) = open_and_decode_logged(frame, shared.group, LINK_WORKSPACE, &shared.keys)
         .map_err(|kind| conn.refused = Some(kind))
         .ok()?;
     let now_ms = any_route_now_ms(&shared.routes);
@@ -121,7 +119,11 @@ fn greet_for_peer(
     conn: &mut Conn,
     peer: DeviceId,
 ) -> bool {
-    conn.routes = crate::lan_session_gate::session_routes(&shared.routes, shared.device, peer);
+    if crate::group_rotation::is_removed(&shared.identity, peer) {
+        conn.refused = Some("removed_peer");
+        return log_removed_peer_refused(peer);
+    }
+    conn.routes = crate::lan_session_gate::session_routes(&shared.routes, peer);
     open_every_route(&mut conn.session, &conn.routes);
     let ids: Vec<WorkspaceId> = conn.routes.keys().copied().collect();
     ids.into_iter()
@@ -142,7 +144,7 @@ fn dispatch_workspace_frame(
         log_unrouted_workspace_skipped(workspace);
         return Some(());
     };
-    let msg = open_and_decode_logged(frame, shared.group, workspace, &shared.keys).ok()?;
+    let (msg, epoch) = open_and_decode_logged(frame, shared.group, workspace, &shared.keys).ok()?;
     conn.live.observe(workspace, &msg);
     let ctx = SessionCtx {
         ws: &route.ws,
@@ -150,7 +152,9 @@ fn dispatch_workspace_frame(
         group: shared.group,
         workspace,
         key: &shared.key,
-        signing_key: &shared.signing_key,
+        // The batch was signed with the key of the epoch it was sealed under (it opened, so the
+        // table holds it).
+        verify_key: crate::group_epoch::verify_key(&shared.keys, epoch)?,
     };
     handle_workspace_message(link, &ctx, &mut conn.session, msg).then_some(())
 }
@@ -237,18 +241,6 @@ fn run_shared_message_loop(link: &mut dyn Link, shared: &SharedCtx<'_>, conn: &m
     tracing::warn!(cap = MAX_TURNS_PER_SESSION, "lan_session_turn_cap_reached");
 }
 
-/// A workspace opened or closed since this session greeted its set: end it, and the reconnect
-/// greets the new set (task `sync-live-push`).
-fn log_own_devices_changed() -> Option<()> {
-    tracing::info!("lan_session_own_devices_changed");
-    None
-}
-
-fn log_routes_changed() -> Option<()> {
-    tracing::debug!("lan_session_routes_changed_reconnecting");
-    None
-}
-
 /// Turns one connection runs before it is closed and redialed: at least a few hours at one
 /// [`POLL`] each, and never fewer than the old per-session message cap.
 const MAX_TURNS_PER_SESSION: usize = MAX_MESSAGES_PER_SESSION * 3;
@@ -290,22 +282,14 @@ fn open_every_route(session: &mut Session, routes: &BTreeMap<WorkspaceId, Worksp
     }
 }
 
-fn log_no_routed_workspace() {
-    tracing::debug!("lan_session_skipped_no_routed_workspace");
-}
-
-fn log_no_group_key() {
-    tracing::debug!("lan_session_skipped_no_group_key");
-}
-
 /// The crypto-material half of [`build_shared_ctx`] — `None` (logged) when no routed workspace's
 /// keystore holds the (necessarily shared, ADR 0021) group key, or the epoch table it builds
 /// refuses it. Split out purely to keep `build_shared_ctx` under this workspace's cognitive-
 /// complexity budget (`clippy.toml`).
-fn group_crypto(first: &WorkspaceRoute) -> Option<(GroupKey, GroupKeys, DeviceSigningKey)> {
+fn group_crypto(first: &WorkspaceRoute) -> Option<(EpochKey, GroupKeys, DeviceSigningKey)> {
     let key = fetch_group_key(&first.ws)?;
-    let keys = single_epoch_keys(key.clone())?;
-    let signing_key = derive_group_op_signing_key(&key);
+    let keys = retained_keys(&first.ws, key.epoch)?;
+    let signing_key = key.signing_key();
     Some((key, keys, signing_key))
 }
 
@@ -314,7 +298,6 @@ fn group_crypto(first: &WorkspaceRoute) -> Option<(GroupKey, GroupKeys, DeviceSi
 /// read from any routed workspace's keystore.
 fn build_shared_ctx(
     routes: &WorkspaceRoutes,
-    device: DeviceId,
     group: GroupId,
     carrier: Carrier,
 ) -> Option<SharedCtx<'_>> {
@@ -329,6 +312,7 @@ fn build_shared_ctx(
         return None;
     };
     let live_peers = read(&first.ws).live_peers().clone();
+    let identity = Arc::clone(read(&first.ws).identity());
     let own_at = live_peers.own_generation();
     Some(SharedCtx {
         table: routes,
@@ -341,8 +325,8 @@ fn build_shared_ctx(
         routes: all,
         live_peers,
         own_at,
-        device,
         carrier,
+        identity,
     })
 }
 
@@ -361,7 +345,7 @@ pub(crate) fn drive_shared_session(
     group: GroupId,
     carrier: Carrier,
 ) -> SessionEnd {
-    let Some(shared) = build_shared_ctx(routes, device, group, carrier) else {
+    let Some(shared) = build_shared_ctx(routes, group, carrier) else {
         return SessionEnd::NoHello;
     };
     // Deliberately at `info`, not `debug`: this is the one line proving stage 2's actual point —

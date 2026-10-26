@@ -103,7 +103,8 @@ async fn async_main() -> ExitCode {
     // `WorkspaceInfo.root` is canonical; the W popup finds the open workspace by comparing it.
     let root = workspace.canonicalize().unwrap_or(workspace);
     match run_in(&mut daemon, &root_list, &root.to_string_lossy(), label).await {
-        Ok(()) => ExitCode::SUCCESS,
+        // Settings > General's "Updates" row asked for it: the terminal is ours again.
+        Ok(()) => crate::app_upgrade::run_if_requested().unwrap_or(ExitCode::SUCCESS),
         Err(e) => {
             eprintln!("txtodo-tui: {e}");
             ExitCode::FAILURE
@@ -139,6 +140,8 @@ pub async fn run_in(
         state.shell.daemon_build =
             crate::buildinfo::other_build(&health.version, &health.release_date);
     }
+    // Every open looks for new repos in the background; best effort, an older daemon has no scan.
+    let _ = daemon.repos_scan().await;
     state.skill_hint = crate::skill_hint::needed(crate::skill_hint::home_dir().as_deref());
     state.settings.prefs = crate::prefs::load();
     state.settings.socket = global_socket_path().display().to_string();
@@ -175,7 +178,7 @@ async fn reconnect_watch_inner(
     if *reconnects > MAX_RECONNECT_ATTEMPTS {
         return Err(DaemonError::Timeout);
     }
-    let watch = daemon.watch(vec![state.path.clone()]).await?;
+    let watch = daemon.watch(Vec::new()).await?; // every list, as `Watching::open`
     let file = daemon.get_file(&state.path).await?;
     rebaseline(state, &file);
     Ok(watch)
@@ -205,6 +208,7 @@ fn action_kind(action: &Action) -> &'static str {
         Action::DeclineOffer(_) => "decline_offer",
         Action::SwitchWorkspace(_) => "switch_workspace",
         Action::OpenWorkspaceMenu => "open_workspace_menu",
+        Action::OpenListPicker(_) => "open_list_picker",
         Action::Copy(_) => "copy",
         Action::Undo(..) => "undo",
         Action::OpenDetail(_) => "open_detail",
@@ -249,15 +253,29 @@ async fn perform_screens(
             crate::app_workspace::switch_workspace(daemon, state, &query).await
         }
         Action::OpenWorkspaceMenu => crate::app_workspace::open_menu(daemon, state).await,
+        Action::OpenListPicker(mode) => {
+            crate::app_workspace::open_picker(daemon, state, mode).await
+        }
         Action::OpenDetail(parent) => crate::app_detail::open(daemon, state, parent).await,
         Action::SaveNotes(task, text) => {
             crate::app_detail::save_notes(daemon, state, task, text).await
         }
+        Action::Settings(action) => crate::app_settings::perform(daemon, state, action).await,
+        other => perform_universal(daemon, state, other).await,
+    }
+}
+
+/// The Universal screen's actions, split from `perform_screens` for its complexity budget.
+async fn perform_universal(
+    daemon: &mut Daemon,
+    state: &mut AppState,
+    action: Action,
+) -> Result<(), DaemonError> {
+    match action {
         Action::RefreshUniversal => {
             crate::app_universal::refresh(daemon, state).await;
             Ok(())
         }
-        Action::Settings(action) => crate::app_settings::perform(daemon, state, action).await,
         Action::OpenUniversal(task) => crate::app_universal::open(daemon, state, task).await,
         Action::CompleteUniversal(task) => {
             crate::app_universal::complete(daemon, state, task).await
@@ -297,6 +315,7 @@ pub async fn follow_change(
     let path = change.path.clone();
     let this_document = crate::app_detail::watched_paths(state).contains(&path);
     let groups = path == state.path && crate::app_duplicates::worth_refresh(state, &change);
+    crate::app_notices::take(state, &change);
     if layout_changed {
         return crate::app_layout::follow_root_list(daemon, state).await;
     }

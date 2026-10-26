@@ -11,7 +11,6 @@ use crate::state::AppState;
 use crate::ui::edit::{self, OpenKey};
 use crate::ui::{conflicts, offers};
 
-/// What the status line says when a command would change a line under review.
 /// Runs one command against `state`: the daemon call it needs, if any.
 pub fn run(state: &mut AppState, command: Command) -> Option<Action> {
     if crate::fields::op_of(command).is_some() || command == Command::EditUndo {
@@ -79,6 +78,7 @@ fn run_panes(state: &mut AppState, command: Command) -> Option<Action> {
         Command::AppQuit => return Some(Action::Quit),
         other => {
             let run = crate::commands_nav::run(state, other)
+                .or_else(|| crate::list_picker::run(state, other))
                 .or_else(|| crate::search::run(state, other))
                 .or_else(|| crate::commands_detail::run(state, other))
                 .or_else(|| crate::prompt::run(state, other))

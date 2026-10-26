@@ -197,7 +197,7 @@ fn conflicts_without_a_daemon_say_so() {
     // fallback message, rather than a real `txtodod` on this machine's `$PATH` making it succeed.
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("todo.txt"), "").unwrap();
-    // Every subcommand is daemon-only: the daemon derives the groups from the file it holds.
+    // Every subcommand is daemon-only: the daemon derives the duplicate groups.
     for args in [
         &["conflicts"] as &[&str],
         &["conflicts", "keep-newest", "--yes"],
@@ -232,13 +232,9 @@ fn conflicts_list_reports_none_and_resolve_is_gone() {
     let out = txtodo(dir.path(), &["conflicts", "--json"]);
     assert!(out.status.success());
     assert!(stdout(&out).is_empty(), "{}", stdout(&out));
-    // Same-word review went with the todo.txt mirror (ADR 0038): `resolve` is a usage error.
-    let before = todo_txt(dir.path());
+    // `resolve` went with the needs_review flags (ADR 0038): clap refuses it as a usage error.
     let out = txtodo(dir.path(), &["conflicts", "resolve", "1", "merged"]);
-    assert!(!out.status.success(), "resolve is gone");
-    let err = String::from_utf8_lossy(&out.stderr);
-    assert!(err.contains("unrecognized subcommand"), "{err}");
-    assert_eq!(before, todo_txt(dir.path()), "nothing is written");
+    assert!(!out.status.success(), "resolve is no longer a subcommand");
 }
 
 // --- plan M4 tasks/sync-device-remove: `txtodo device list`/`remove` ---

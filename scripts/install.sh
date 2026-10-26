@@ -20,6 +20,10 @@
 #   TXTODO_NO_DESKTOP=1          skip the desktop app
 #   TXTODO_NO_CLI=1              skip txtodo, txtodod, txtodo-mcp and txtodo-tui
 set -euo pipefail
+# Say which line failed instead of exiting silently (`set -E`: functions inherit the ERR trap).
+# Ref: https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html
+set -E
+trap 'echo "install: failed at line $LINENO: $BASH_COMMAND" >&2' ERR
 
 repo="aaronmyatt/txtodo"
 app="txtodo.app"
@@ -58,32 +62,45 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# The desktop app is the fragile half (it mounts a disk image, which a managed Mac can refuse), so
+# it runs after the binaries and a failure here never costs them. Each step checks itself: inside
+# `install_desktop || ...` `set -e` is off, so a bare failing command would not stop the function.
+# stdin is /dev/null for every child: under `curl | bash` stdin is the script itself, and a child
+# that reads it would swallow the rest of the script.
 install_desktop() {
   local asset="desktop-${leg}.dmg" dest="${TXTODO_INSTALL_DIR:-}"
   # /Applications when writable (admin users), else per-user ~/Applications: no sudo needed.
   if [ -z "$dest" ]; then
     if [ -w /Applications ]; then dest="/Applications"; else dest="$HOME/Applications"; fi
   fi
-  mkdir -p "$dest"
+  mkdir -p "$dest" || return 1
 
   log "downloading $base/$asset"
-  curl -fL --progress-bar -o "$tmp/$asset" "$base/$asset"
+  curl -fL --progress-bar -o "$tmp/$asset" "$base/$asset" </dev/null || return 1
 
-  # -nobrowse keeps the volume out of Finder; -readonly since we only copy out of it.
+  # -nobrowse keeps the volume out of Finder; -readonly since we only copy out of it. No -quiet:
+  # it closes stderr too, so a refused mount used to end the script without a word. Stdout carries
+  # only the /dev entries, so that alone goes to /dev/null.
   # Ref: https://keith.github.io/xcode-man-pages/hdiutil.1.html
-  mkdir -p "$mnt"
-  hdiutil attach -quiet -nobrowse -readonly -mountpoint "$mnt" "$tmp/$asset"
-  [ -d "$mnt/$app" ] || die "$app not found inside $asset"
+  mkdir -p "$mnt" || return 1
+  if ! hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$tmp/$asset" </dev/null >/dev/null; then
+    log "could not mount $asset (hdiutil said the above)"
+    return 1
+  fi
+  if [ ! -d "$mnt/$app" ]; then
+    log "$app not found inside $asset"
+    return 1
+  fi
 
   # Quit a running copy first so the replaced bundle isn't in use. Errors mean it wasn't running.
   # Ref: https://developer.apple.com/library/archive/documentation/AppleScript/Conceptual/AppleScriptLangGuide/reference/ASLR_cmds.html#//apple_ref/doc/uid/TP40000983-CH216-SW52
-  osascript -e 'quit app "txtodo"' >/dev/null 2>&1 || true
+  osascript -e 'quit app "txtodo"' </dev/null >/dev/null 2>&1 || true
 
   # Remove the old bundle before copying: ditto merges into an existing dir, which would leave
   # stale files from the previous version behind. ditto keeps the signature and xattrs intact.
   # Ref: https://keith.github.io/xcode-man-pages/ditto.1.html
-  rm -rf "${dest:?}/$app"
-  ditto "$mnt/$app" "$dest/$app"
+  rm -rf "${dest:?}/$app" || return 1
+  ditto "$mnt/$app" "$dest/$app" </dev/null || return 1
   # Belt and braces: clear any quarantine flag in case the dmg came from somewhere that set one.
   # Ref: https://keith.github.io/xcode-man-pages/xattr.1.html
   xattr -dr com.apple.quarantine "$dest/$app" 2>/dev/null || true
@@ -119,5 +136,11 @@ install_cli() {
   esac
 }
 
-[ -n "${TXTODO_NO_DESKTOP:-}" ] || install_desktop
+# The binaries first: they are what sync needs, and they are plain downloads.
 [ -n "${TXTODO_NO_CLI:-}" ] || install_cli
+if [ -z "${TXTODO_NO_DESKTOP:-}" ]; then
+  if ! install_desktop; then
+    log "the desktop app was NOT installed (see above); the command-line tools above were."
+    log "retry the app alone with: TXTODO_NO_CLI=1, or skip it with TXTODO_NO_DESKTOP=1"
+  fi
+fi

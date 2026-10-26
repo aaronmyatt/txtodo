@@ -1,6 +1,7 @@
-//! The default merges only with an own device (task `default-workspace-pairing-consent`): a
-//! session's route set keeps the reserved id for an own peer and swaps it for this device's alias
-//! for any other peer, known or not.
+//! The default and a named list are private to the user's own devices (tasks
+//! `default-workspace-pairing-consent`, `two-kinds-of-workspace`): a session's route set keeps both
+//! for an own peer and carries neither to any other peer, known or not. The default used to reach a
+//! foreign peer under an alias; that went with the Remote mirror.
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
@@ -9,9 +10,10 @@ use txtodo_model::{DeviceId, IdentityMode, Ulid};
 use txtodo_store::NewDevice;
 
 use crate::clock::FakeClock;
-use crate::default_workspace::{default_alias, default_workspace_id};
+use crate::default_workspace::default_workspace_id;
 use crate::device_relay::WorkspaceRoute;
 use crate::lan_session_gate::session_routes;
+use crate::list_workspace::ListName;
 use crate::workspace::Workspace;
 
 fn device(n: u128) -> DeviceId {
@@ -35,7 +37,7 @@ fn register(ws: &Workspace, peer: DeviceId, own: bool) {
 }
 
 #[tokio::test]
-async fn the_default_goes_by_its_alias_to_any_peer_that_is_not_own() {
+async fn the_default_and_a_named_list_go_to_an_own_peer_and_to_nobody_else() {
     let dir = tempfile::tempdir().unwrap();
     let ws = Workspace::open_with_default_mode(
         dir.path(),
@@ -52,26 +54,22 @@ async fn the_default_goes_by_its_alias_to_any_peer_that_is_not_own() {
         device: me,
         group,
     };
-    let all = BTreeMap::from([(default_workspace_id(), route)]);
+    let work = ListName::parse("work").unwrap().id();
+    let all = BTreeMap::from([
+        (default_workspace_id(), route.clone()),
+        (work, route.clone()),
+    ]);
 
-    let own = session_routes(&all, me, device(2));
-    assert!(own.contains_key(&default_workspace_id()), "own: merges");
+    let own = session_routes(&all, device(2));
+    assert!(own.contains_key(&work), "an own device gets the list");
+    assert!(own.contains_key(&default_workspace_id()), "and the default");
 
     for peer in [device(3), device(4)] {
-        let apart = session_routes(&all, me, peer);
-        assert!(!apart.contains_key(&default_workspace_id()), "{peer}");
-        assert!(apart.contains_key(&default_alias(me)), "{peer}");
+        let apart = session_routes(&all, peer);
+        assert!(
+            apart.is_empty(),
+            "{peer}: both are private: {:?}",
+            apart.keys()
+        );
     }
-}
-
-#[test]
-fn an_alias_is_stable_per_device_and_never_the_link_sentinel() {
-    assert_eq!(default_alias(device(1)), default_alias(device(1)));
-    assert_ne!(default_alias(device(1)), default_alias(device(2)));
-    assert_ne!(default_alias(device(1)), default_workspace_id());
-    assert_ne!(
-        default_alias(device(1)).ulid().to_u128() >> 80,
-        0,
-        "a non-zero ULID timestamp"
-    );
 }

@@ -89,3 +89,37 @@ test("W opens the menu with the keyboard on a row; j/k move; W closes", async ({
 	await page.keyboard.press("Shift+W");
 	await expect(sidebar).toBeHidden();
 });
+
+// Task two-kinds-of-workspace: lists and repos sit under their own headings; a list is made, renamed
+// and removed from the menu through the list calls (the daemon checks the name; remove moves the
+// folder aside).
+test("a list is made from the menu, sits under Lists, renames and is removed", async ({ page }) => {
+	await page.getByRole("button", { name: "Open workspace navigation" }).click();
+	const sidebar = page.getByRole("menu");
+
+	await sidebar.getByRole("textbox", { name: "New list name" }).fill("Work");
+	await sidebar.getByRole("button", { name: "New list" }).click();
+	const row = sidebar.getByRole("listitem").filter({ hasText: "/lists/work" });
+	await expect(row).toBeVisible();
+	await expect(sidebar.getByText("Lists", { exact: true })).toBeVisible();
+	await expect(sidebar.getByText("Repos", { exact: true })).toBeVisible();
+	await expect(row).toContainText("work");
+
+	await row.getByRole("button", { name: /^Rename / }).click();
+	const input = sidebar.getByRole("textbox", { name: /^Name for / });
+	await input.fill("projects");
+	await input.press("Enter");
+	await expect(input).toBeHidden();
+	await expect(row).toContainText("projects");
+
+	await row.getByRole("button", { name: /^Remove / }).click();
+	await expect(row).toBeHidden();
+});
+
+test("a name that is no list name is refused and shown", async ({ page }) => {
+	await page.getByRole("button", { name: "Open workspace navigation" }).click();
+	const sidebar = page.getByRole("menu");
+	await sidebar.getByRole("textbox", { name: "New list name" }).fill("has space");
+	await sidebar.getByRole("button", { name: "New list" }).click();
+	await expect(sidebar.getByRole("alert")).toContainText("may use only");
+});

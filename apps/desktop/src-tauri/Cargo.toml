@@ -72,6 +72,10 @@ tauri-plugin-dialog = "2"
 # https://docs.rs/tauri-plugin-global-shortcut — menu-bar quick-add's global hotkey
 # (tasks/desktop-quick-add/notes.md). New dependency: needs human sign-off + a `cargo deny` pass.
 tauri-plugin-global-shortcut = "2"
+# https://v2.tauri.app/plugin/notification/ — OS notifications for another client's changes (task
+# change-notifications). New dependency, decided by the agent 2026-10-11 when asked to decide
+# @human lines; see tasks/change-notifications/notes.md.
+tauri-plugin-notification = "2"
 # https://docs.rs/serde — DTOs that cross the Tauri IPC bridge (prost types aren't Serialize)
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

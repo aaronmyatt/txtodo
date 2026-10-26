@@ -33,11 +33,14 @@ impl Workspace {
             static_public,
             paired_at_ms: now_ms,
             last_known_wall_ms: None,
-            key_epoch: 0,
+            // It was just handed this device's current key.
+            key_epoch: self.group_epoch(),
         };
         store.register_device_as(&new, own)?;
         // A peer parked for holding another group's key shares ours now (task sync-drift line 5).
         self.peer_keys().forget(device, "paired");
+        // Dials that failed while this peer was removed or in another group start over.
+        self.live_peers().bump_dial_generation();
         Ok(())
     }
 }

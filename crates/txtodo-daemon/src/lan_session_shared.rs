@@ -42,11 +42,11 @@ use tokio::runtime::Handle;
 use txtodo_model::Ulid;
 use txtodo_store::WorkspaceId;
 use txtodo_sync::{
-    CryptoError, DeviceSigningKey, Frame, GroupId, GroupKey, GroupKeys, Link, LinkError, Message,
+    CryptoError, DevicePublicKey, Frame, GroupId, GroupKeys, Link, LinkError, Message,
     MessageError, SealFor, Session, open, seal,
 };
 
-use crate::lan_session::GROUP_EPOCH;
+use crate::group_epoch::EpochKey;
 
 /// A hostile or buggy peer cannot keep one connection's driver looping forever — bounded the same
 /// way every other loop in this codebase is. Shared across every workspace this connection
@@ -101,16 +101,16 @@ pub(crate) fn send_message(
     link: &mut dyn Link,
     group: GroupId,
     workspace: WorkspaceId,
-    key: &GroupKey,
+    key: &EpochKey,
     msg: Message,
 ) -> Result<(), SyncError> {
     let plain = msg.encode()?;
     let for_ = SealFor {
         group,
-        epoch: GROUP_EPOCH,
+        epoch: key.epoch,
         workspace,
     };
-    let sealed = seal(plain.version, for_, key, &plain.body)?;
+    let sealed = seal(plain.version, for_, &key.key, &plain.body)?;
     link.send(Frame {
         version: plain.version,
         body: sealed,
@@ -118,18 +118,21 @@ pub(crate) fn send_message(
     Ok(())
 }
 
-/// Opens `frame` under `workspace`'s key material and decodes the `Message` inside.
+/// Opens `frame` under `workspace`'s key material and decodes the `Message` inside, with the epoch
+/// the frame was sealed under (its sender's current one: the key to verify its op signatures with).
 fn open_and_decode(
     frame: &Frame,
     group: GroupId,
     workspace: WorkspaceId,
     keys: &GroupKeys,
-) -> Result<Message, SyncError> {
+) -> Result<(Message, u32), SyncError> {
     let plain = open(frame.version, group, workspace, keys, &frame.body)?;
-    Ok(Message::decode(&Frame {
+    let epoch = txtodo_sync::sealed_epoch(&frame.body).unwrap_or(0);
+    let msg = Message::decode(&Frame {
         version: frame.version,
         body: plain,
-    })?)
+    })?;
+    Ok((msg, epoch))
 }
 
 /// `Err(kind)` on any failure worth ending the connection over — logged here at debug; the peer's
@@ -140,7 +143,7 @@ pub(crate) fn open_and_decode_logged(
     group: GroupId,
     workspace: WorkspaceId,
     keys: &GroupKeys,
-) -> Result<Message, &'static str> {
+) -> Result<(Message, u32), &'static str> {
     open_and_decode(frame, group, workspace, keys).map_err(|e| {
         let kind = sync_error_kind(&e);
         tracing::debug!(error = %e, kind, "lan_session_open_failed");
@@ -202,8 +205,10 @@ pub(crate) struct SessionCtx<'a> {
     pub(crate) rt: &'a Handle,
     pub(crate) group: GroupId,
     pub(crate) workspace: WorkspaceId,
-    pub(crate) key: &'a GroupKey,
-    pub(crate) signing_key: &'a DeviceSigningKey,
+    pub(crate) key: &'a EpochKey,
+    /// Verifies the batch being handled: the key of the epoch its frame was sealed under, which may
+    /// be an older one (`group_epoch.rs`).
+    pub(crate) verify_key: DevicePublicKey,
 }
 
 impl SessionCtx<'_> {

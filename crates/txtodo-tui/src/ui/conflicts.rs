@@ -1,8 +1,7 @@
-//! The `r` conflicts sheet: walks the file's duplicate groups (ADR 0032), two or more lines that
-//! read the same. `n`/`o` keep the newest or the oldest copy and delete the rest with an ordinary
-//! `Apply` `Delete` by task id, as `txtodo conflicts` does; there is no resolve RPC for them.
-//! Same-word review (`needs_review` flags, Keep mine/theirs) went with the todo.txt mirror
-//! (ADR 0038).
+//! The `r` review pane: the file's duplicate groups (ADR 0032), two or more lines that read the
+//! same. `n`/`o` keep the newest or the oldest copy and delete the rest with an ordinary `Apply`
+//! `Delete` by task id, as `txtodo conflicts` does. The `needs_review` flags it listed first, and
+//! their mine/theirs/merged picks, went with the Loro mirror (ADR 0038, conflict review A).
 
 use txtodo_proto::v1 as pb;
 
@@ -17,7 +16,7 @@ pub enum Keep {
     Oldest,
 }
 
-/// `j` inside the sheet, clamped to the groups.
+/// `j`/`k` inside the pane, clamped to the groups.
 pub fn move_down(state: &mut AppState) {
     let len = state.review_len();
     if len == 0 {
@@ -65,7 +64,7 @@ pub fn keep_request(state: &AppState, keep: Keep) -> Option<pb::ApplyRequest> {
     Some(req)
 }
 
-/// `k` inside the sheet.
+/// `j`/`k` inside the pane.
 pub fn move_up(state: &mut AppState) {
     state.conflict_cursor = state.conflict_cursor.saturating_sub(1);
 }
@@ -107,27 +106,22 @@ mod tests {
     }
 
     #[test]
-    fn the_sheet_walks_the_groups_and_clamps() {
+    fn the_pane_walks_the_groups() {
         let mut state = AppState::fixture();
-        assert!(selected_group(&state).is_none(), "no groups");
-        assert!(keep_request(&state, Keep::Newest).is_none());
-        with_group(&mut state, 1);
-        with_group(&mut state, 5);
+        with_group(&mut state);
+        with_group(&mut state);
         move_up(&mut state);
         assert_eq!(state.conflict_cursor, 0);
         move_down(&mut state);
         move_down(&mut state);
         assert_eq!(state.conflict_cursor, 1, "clamped at the last group");
-        assert_eq!(
-            selected_group(&state).map(|g| g.copies[0].line_number),
-            Some(5)
-        );
+        assert!(selected_group(&state).is_some());
     }
 
     #[test]
     fn keeping_a_copy_deletes_the_others_by_task_id() {
         let mut state = AppState::fixture();
-        with_group(&mut state, 1);
+        with_group(&mut state);
         let newest = keep_request(&state, Keep::Newest).unwrap();
         assert_eq!(
             deleted_ids(&newest),

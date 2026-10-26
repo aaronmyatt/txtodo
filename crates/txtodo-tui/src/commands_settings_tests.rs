@@ -40,7 +40,8 @@ fn appearance_toggles_save_the_preferences() {
 #[test]
 fn a_field_takes_typing_then_enter_submits_it() {
     let mut state = settings(SettingsCard::Workspaces);
-    // No workspaces listed: row 0 is Add a workspace.
+    // No workspaces listed: row 0 is New list, row 1 is Add a workspace.
+    state.settings.row = 1;
     assert_eq!(run(&mut state, Command::SettingsActivate), Some(None));
     assert_eq!(state.settings.field.as_deref(), Some(""));
     for c in "/tmp/w".chars() {
@@ -53,6 +54,23 @@ fn a_field_takes_typing_then_enter_submits_it() {
         )))
     );
     assert_eq!(state.settings.field, None);
+}
+
+#[test]
+fn the_new_list_field_makes_a_list_of_what_is_typed() {
+    let mut state = settings(SettingsCard::Workspaces);
+    state.settings.row = 0;
+    assert_eq!(run(&mut state, Command::SettingsActivate), Some(None));
+    for c in "work".chars() {
+        on_text_key(&mut state, key(KeyCode::Char(c)));
+    }
+    assert_eq!(
+        on_text_key(&mut state, key(KeyCode::Enter)),
+        Some(Action::Settings(SettingsAction::NewList("work".to_owned())))
+    );
+    // Nothing typed: nothing sent.
+    run(&mut state, Command::SettingsActivate);
+    assert_eq!(on_text_key(&mut state, key(KeyCode::Enter)), None);
 }
 
 #[test]

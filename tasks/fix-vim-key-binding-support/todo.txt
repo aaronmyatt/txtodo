@@ -1,0 +1,5 @@
+x 2026-10-17 2026-10-17 desktop: a click selects a line in list mode; a click on the current line edits it (list.click_to_edit) +m11 @desktop — 2833155b; e2e list-mode: a click selects, k moves, the file is untouched; a click on the current line edits
+x 2026-10-17 2026-10-17 desktop: Esc in the prompt bar goes back to list mode, not into the buffer +m11 @desktop — 2833155b; e2e: n, Esc, k moves the list
+x 2026-10-17 2026-10-17 desktop: Esc lets go of a focused button or link, so list keys work again +m11 @desktop — 2833155b; e2e: Help link focused, Esc, j moves; panels that close on Esc still hear it
+x 2026-10-17 2026-10-17 desktop: keyName writes Shift- before a named key, like the TUI +m11 @desktop — 2833155b; vitest: Shift-Space and Shift-Enter bind nothing
+x 2026-10-17 2026-10-17 desktop: Mod-Enter opens the detail in list mode (detail.open) +m11 @desktop — 2833155b; vitest: Cmd-Enter and Ctrl-Enter both open; known gap: no e2e for it

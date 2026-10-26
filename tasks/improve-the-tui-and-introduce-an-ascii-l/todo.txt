@@ -1,0 +1,3 @@
+x 2026-10-11 2026-10-11 TUI: header mark reads as the tx logo in one row; four strokes still light by progress +m11 @tui — ┼╲ ╳, x in one cell; known gap: not eyeballed in a real terminal yet
+x 2026-10-11 2026-10-11 cli: ASCII logo above txtodo --help (before_long_help), -h stays terse; a test pins it +m11 @cli — 7-row ASCII mark on --help only, logo.rs
+x 2026-10-11 2026-10-11 Complete the parent line in ./todo.txt +m11

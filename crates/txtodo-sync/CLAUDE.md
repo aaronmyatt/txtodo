@@ -4,11 +4,22 @@
 Protocol, transports, pairing, crypto. Plan M4/M8.
 
 ## Public interface
+- Feature `native` (default; ADR 0042, task `web-pwa`, 2026-10-17) holds what needs the OS or
+  tokio: `discovery` (mdns-sd), `keystore_os` (keyring), `lan_link`/`dial_order` and `holepunch`
+  (tokio). Without it the crate builds for `wasm32-unknown-unknown` for the web peer; CI's `wasm`
+  job checks it. `endpoint`, `relay` (iroh builds for the browser too, relay-only) and every
+  pure module stay in both builds. `build_relay_endpoint_with_secret_key` is exported for a
+  browser host that binds its own relay endpoint with a stable key.
 - `Frame { version, body }` — the frozen envelope (`TXTO` · u16 LE version · u32 LE len · body);
-  `Frame::{new, encode, decode, peek}`, `FrameError`, `PROTOCOL_VERSION` (= 5; 1 -> 2 by
+  `Frame::{new, encode, decode, peek}`, `FrameError`, `PROTOCOL_VERSION` (= 6; 1 -> 2 by
   task `daemon-workspace-session-multiplex`, 2 -> 3 by ADR 0035, 3 -> 4 by ADR 0036's
   `OpKind::RemoveTag`, 4 -> 5 by ADR 0029's amendment: `ControlMessage::OwnDevices { sender,
-  devices }`, tag 3, at most `MAX_OWN_DEVICES`), `MAX_FRAME_BYTES`.
+  devices }`, tag 3, at most `MAX_OWN_DEVICES`; 5 -> 6 by ADR 0044: `ControlMessage::Grant { sender,
+  minter, epoch, ephemeral_public, sealed, left_out }`, tag 4, one rotated group key wrapped to one device
+  (`rotation::wrap_grant_for`), at most `MAX_GRANT_SEALED_BYTES` sealed and `MAX_OWN_DEVICES` left out; `ControlMessage::Epoch { sender, epoch }`, tag 5, the epoch a device is on, said first in a
+  control session and as the ack of a grant;
+  `sealed_epoch(sealed)` reads the epoch a sealed batch or control frame names; `PairingGrant.epoch` is the
+  initiator's current epoch, 0 when absent), `MAX_FRAME_BYTES`.
 - `Message::{Hello, Want, Ops, Ack, Greet, Digest}` (append-only variants — `Greet` added stage 2,
   index 4, no bump; `Digest { workspace, files: Vec<FileDigest { path, ops, bytes }> }` index 5,
   ADR 0035, with the 2 -> 3 bump because a v2 peer drops the link on it; cap
@@ -110,7 +121,9 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   `KeyStoreError`, `MAX_STORED_EPOCHS`. Backends: `MemoryKeyStore` (tests only), `FileKeyStore`
   (`create`/`open`, Argon2id + XChaCha20-Poly1305, params in the file header,
   `ARGON2_MEMORY_KIB`/`ARGON2_ITERATIONS`/`ARGON2_PARALLELISM`), `OsKeyStore` (`keyring` crate,
-  `probe` for reachability). `resolve(mode, probe_os, make_os, make_file) -> (ResolvedBackend, Box<dyn
+  `probe` for reachability), `VaultKeyStore<S>` (task can-we-limit-the-number-of-keychain-pass:
+  every key in one `KeyId::Vault` item of `S`, read once, old per-key items moved in lazily and
+  deleted; one keychain access list, so one prompt). `resolve(mode, probe_os, make_os, make_file) -> (ResolvedBackend, Box<dyn
   KeyStore>)` implements `key_store = "auto" | "os" | "file"`; `KeyStoreMode`, `ResolvedBackend::name`.
 - Pairing (M4 `sync-pairing`), transport-agnostic — no networking, just the crypto/state machine:
   `wordlist()` (the vendored EFF short list, `WORDLIST_LEN` = 1296, `WORDLIST_SHA256`);

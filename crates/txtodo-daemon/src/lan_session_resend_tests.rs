@@ -151,6 +151,20 @@ pub(crate) async fn wait_until(what: &str, mut ok: impl FnMut() -> bool) {
     }
 }
 
+/// Waits until A pushes to B, before a test starts dropping frames. `is_live` is not enough: A
+/// marks B live on B's `Hello`, but the `Greet`/`Want` swap comes after it, and A pushes only once
+/// B's `Want` is in (`lan_session_live.rs`). Dropping B's frames before its `Want` is out left A
+/// nothing to push to, so the test's line never landed (CI runs 38057895620, 38130401111).
+async fn wait_until_a_pushes(pair: &Pair) {
+    let (a, device_b) = (Arc::clone(&pair.a), pair.device_b);
+    wait_until("never linked", || {
+        a.read().unwrap().live_peers().is_live(device_b)
+    })
+    .await;
+    add_line(&pair.a, "handshake done").await;
+    wait_for_line(&pair.b, "handshake done").await;
+}
+
 pub(crate) async fn finish(pair: Pair) {
     let (a, device_b) = (Arc::clone(&pair.a), pair.device_b);
     assert!(
@@ -167,11 +181,7 @@ pub(crate) async fn finish(pair: Pair) {
 async fn slow_a_batch_the_peer_never_got_is_sent_again_in_the_same_session() {
     let pair = start_pair(OPS_FRAME_MIN);
     let _stop = StopOnDrop(Arc::clone(&pair.stop));
-    let (a, device_b) = (Arc::clone(&pair.a), pair.device_b);
-    wait_until("never linked", || {
-        a.read().unwrap().live_peers().is_live(device_b)
-    })
-    .await;
+    wait_until_a_pushes(&pair).await;
 
     pair.loss_a.drop_out.store(true, Ordering::Relaxed);
     add_line(&pair.a, "lost once").await;
@@ -195,17 +205,17 @@ async fn slow_a_copy_of_a_batch_already_held_is_acked_and_the_session_carries_on
     // Every frame B sends is dropped for a while, its Ack for the batch included.
     let pair = start_pair(0);
     let _stop = StopOnDrop(Arc::clone(&pair.stop));
-    let (a, device_b) = (Arc::clone(&pair.a), pair.device_b);
-    wait_until("never linked", || {
-        a.read().unwrap().live_peers().is_live(device_b)
-    })
-    .await;
+    wait_until_a_pushes(&pair).await;
 
     pair.loss_b.drop_out.store(true, Ordering::Relaxed);
     add_line(&pair.a, "acked late").await;
     wait_for_line(&pair.b, "acked late").await;
+    // B's driver sends the batch's Ack right after the commit that shows the line, before any
+    // other frame: one more drop than now means that Ack was dropped (now or already). `> 0`
+    // could count the handshake's Ack instead and stop dropping too soon, so no copy is resent.
     let dropped = Arc::clone(&pair.loss_b.dropped);
-    wait_until("B never acked", || dropped.load(Ordering::Relaxed) > 0).await;
+    let before = dropped.load(Ordering::Relaxed);
+    wait_until("B never acked", || dropped.load(Ordering::Relaxed) > before).await;
     pair.loss_b.drop_out.store(false, Ordering::Relaxed);
 
     // A resends after RESEND_AFTER; B skips the copy and says what it holds.

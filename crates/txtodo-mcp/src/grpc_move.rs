@@ -1,7 +1,8 @@
 //! `todo_move`: a same-file reorder next to another task (design §6.3; task `mcp-move-reorder`).
 //! `before` maps to the daemon's `MoveBefore` mutation; `after` to `MoveBefore` the task that
-//! follows the anchor, or `MoveToEnd` when the anchor is last. Split out of `grpc_write.rs` for
-//! its file budget.
+//! follows the anchor, or `MoveToEnd` when the anchor is last. `to_file` is the daemon's
+//! cross-file `Move` (task add-the-ability-to-move-or-copy-a-task-t): the task keeps its id and its
+//! `ref:` folder goes with it. Split out of `grpc_write.rs` for its file budget.
 
 use txtodo_proto::v1 as pb;
 
@@ -27,7 +28,11 @@ pub(crate) fn move_mutation(
     line: u32,
     anchor: &MoveAnchor,
 ) -> Result<Option<pb::mutation::Kind>, McpError> {
-    let (MoveAnchor::Before(anchor_id) | MoveAnchor::After(anchor_id)) = anchor;
+    let (MoveAnchor::Before(anchor_id) | MoveAnchor::After(anchor_id)) = anchor else {
+        return Err(McpError::invalid_params(
+            "to_file is not a same-file reorder",
+        ));
+    };
     if anchor_id == id {
         return Err(McpError::invalid_params(
             "a task cannot be moved next to itself",
@@ -42,6 +47,7 @@ pub(crate) fn move_mutation(
             task,
             before: Some(task_ref(anchor_line, anchor_id)),
         }))),
+        MoveAnchor::ToFile(_) => Err(McpError::invalid_params("to_file is not a reorder")),
         MoveAnchor::After(_) => {
             let next = parse::lines(&doc.text)
                 .into_iter()
@@ -69,8 +75,18 @@ pub async fn move_task(
     workspace: WorkspaceArg,
 ) -> Result<TaskRow, McpError> {
     let (path, line, _row) = locate_by_id(ctx.client.clone(), &id, workspace.clone()).await?;
-    let doc = get_file_doc(ctx.client.clone(), &path, workspace.clone()).await?;
     let client = ctx.client.clone();
+    if let MoveAnchor::ToFile(to_path) = anchor {
+        let kind = pb::mutation::Kind::Move(pb::Move {
+            task: Some(task_ref(line, &id)),
+            to_path,
+        });
+        let mutation = pb::Mutation { kind: Some(kind) };
+        apply_one(ctx, &path, mutation, workspace.clone()).await?;
+        let (_, _, row) = locate_by_id(client, &id, workspace).await?;
+        return Ok(row);
+    }
+    let doc = get_file_doc(ctx.client.clone(), &path, workspace.clone()).await?;
     if let Some(kind) = move_mutation(&doc, &id, line, &anchor)? {
         let mutation = pb::Mutation { kind: Some(kind) };
         apply_one(ctx, &path, mutation, workspace.clone()).await?;

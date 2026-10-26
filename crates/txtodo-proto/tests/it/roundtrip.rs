@@ -128,7 +128,6 @@ fn responses_and_streams_round_trip() {
         path: "todo.txt".into(),
         hash: vec![3; 32],
         ops: vec![op.clone()],
-        review: Vec::new(),
         progress: Some(Progress { done: 1, total: 3 }),
         duplicate_groups: 2,
     });
@@ -168,6 +167,7 @@ fn requests_round_trip() {
     round_trip(&WatchRequest {
         paths: vec!["todo.txt".into(), "q4/todo.txt".into()],
         workspace: None,
+        shows_notices: true,
     });
     round_trip(&HistoryRequest {
         path: String::new(),
@@ -199,13 +199,16 @@ fn device_messages_round_trip() {
         id: "01ARZ3NDEKTSV4RRFFQ69G5FAV".into(),
         name: "laptop".into(),
         is_self: false,
-        removed: false,
+        removed: true,
         key_epoch: 2,
         paired_at_ms: 1_000,
         last_seen_ms: 2_000,
         skew_status: SkewStatus::Behind as i32,
         skew_ms: 400_000,
         own_device: true,
+        removed_reason: "pruned_quiet".into(),
+        removed_by: "01ARZ3NDEKTSV4RRFFQ69G5FAW".into(),
+        removed_at_ms: 3_000,
     });
     round_trip(&DeviceListResponse {
         devices: vec![Device::default()],

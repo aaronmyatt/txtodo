@@ -5,7 +5,9 @@
 //! Pattern: https://matklad.github.io/2021/02/27/delete-cargo-integration-tests.html
 
 mod roundtrip;
+mod roundtrip_bind;
 mod roundtrip_duplicates;
+mod roundtrip_lists;
 mod roundtrip_protocol;
 mod roundtrip_rejoin;
 mod roundtrip_rename;

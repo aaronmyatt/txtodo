@@ -1,0 +1,6 @@
+2026-10-19 proto: bind_pairs(workspaces) pure fn, lifted from doctor_bind.rs; doctor calls it +m11 @proto @cli
+2026-10-19 desktop: Tauri workspace_bind(workspace_id, root, dry_run) command over WorkspaceBind +m11 @desktop
+2026-10-19 desktop: sidebar and Settings hint on a same-name pair; confirm dialog shows the dry run, Bind runs it, selection moves to the Remote id +m11 @desktop
+2026-10-19 tui: picker row and header hint on a same-name pair +m11 @tui
+2026-10-19 tui: bind key opens a confirm modal with the dry run; y binds and switches to the Remote id +m11 @tui
+2026-10-19 desktop: Use in folder… on any Remote row (folder picker) for a folder whose name does not match +m11 @desktop

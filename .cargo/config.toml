@@ -55,6 +55,9 @@ linker = ".cargo/zig/zigcc-x86_64-windows-gnu.sh"
 # https://doc.rust-lang.org/cargo/reference/config.html#env
 [env]
 TXTODO_NO_SERVICE = "1"
+# ADR 0041: a spawned test daemon shows no OS notice when two test daemons sync (inherited, like
+# the two settings around it).
+TXTODO_NO_NOTICES = "1"
 # Task relay-id-keystore: txtodod with no --key-store flag now defaults to `auto` (try the OS
 # keychain, warn and fall back to memory if there is none) instead of always being in-memory. A
 # spawned test daemon inherits this from whatever test process spawned it (plain process env

@@ -338,6 +338,7 @@ fn finalize_or_pending(
     let sealed = match ws.pairing().try_finalize_initiator(
         ws.key_store().as_ref(),
         ws.device_static_public(),
+        ws.group_epoch(),
         now_ms,
     ) {
         Ok(sealed) => sealed,

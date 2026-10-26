@@ -1,0 +1,3 @@
+x 2026-10-17 2026-10-17 sync: VaultKeyStore keeps every secret in one keychain item, read once; old items move in lazily +m11 @sync — f134dc06; four tests over a counting store: one read for every key, an old item moved once, a refused write kept out of memory, a bad vault never overwritten
+x 2026-10-17 2026-10-17 daemon: the OS keystore is the vault, under the same timeout and cache +m11 @daemon — f50aa5e2; same timeout and cache on top; not tried against the real keychain here (no test touches it)
+x 2026-10-17 2026-10-17 docs: keychain runbook says one prompt, and how the old items move +m11 @docs — 1883f925

@@ -1,3 +1,7 @@
+x 2026-10-11 2026-10-11 cli: sub accepts a slug path (a, a/b); a non-number ITEM is a slug, resolved through the tree, unknown slug is a typed error +m11 @cli
+x 2026-10-11 2026-10-11 cli: --dir inside a workspace scopes to that sub-list like --list, instead of being refused +m11 @cli
+x 2026-10-11 2026-10-11 Test: sub <slug> do 3 hits the right file after a root line above the parent completes; a nested a/b path works +m11 @cli @test
+x 2026-10-11 2026-10-11 Complete the parent line in ./todo.txt +m11 @cli
 x 2026-10-13 2026-10-11 cli: sub accepts a slug path (a, a/b); a non-number ITEM is a slug, resolved through the tree, unknown slug is a typed error +m11 @cli — 60bdbf20
 x 2026-10-13 2026-10-11 Test: sub <slug> do 3 hits the right file after a root line above the parent completes; a nested a/b path works +m11 @cli @test — 60bdbf20
 x 2026-10-13 2026-10-11 cli: --dir inside a workspace scopes to that sub-list like --list, instead of being refused +m11 @cli — 9d6e5a4c; only folders that hold a todo.txt

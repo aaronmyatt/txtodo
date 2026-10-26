@@ -1,3 +1,10 @@
+x 2026-10-11 2026-10-10 Audit root vs sub-list behaviour (keys, add input, drag, undo, toasts) and list every difference in notes.md +m11 @desktop — 9 behaviours compared in notes.md; gaps: list keys, undo toasts, search on sub-lists
+x 2026-10-11 2026-10-10 List mode (listMode.ts) on sub-lists, keys from the parity manifest +m11 @desktop — the active list (newest opened or last clicked) takes list keys; known gap: visual detail snapshot not re-run
+x 2026-10-11 2026-10-10 Fix the rest of the audit's differences +m11 @desktop — search marks hits in sub-lists; footer, quick-add guard and layout stay root-only on purpose
+x 2026-10-11 2026-10-10 One e2e spec run against the root list and a sub-list, so they cannot drift again +m11 @desktop — e2e/list-parity.spec.ts, 4 checks x 2 lists
+x 2026-10-11 2026-10-10 Decide: the add input sits on every list or on none (prompt bar only) +m11 @desktop — decided (agent): none; the prompt bar adds to the active list, see notes.md
+x 2026-10-11 2026-10-10 Apply the add-input decision to root and sub-lists +m11 @desktop — sub-list input removed; PromptBar targets activeListPath and says where
+x 2026-10-11 2026-10-10 Complete the parent line in ./todo.txt +m11 @desktop
 2026-10-13 Decide: which inventory items in notes.md are bugs to fix and which stay (Esc closing the panel, one prompt bar for every list are design calls) +m11 @desktop @human
 2026-10-13 desktop: list-mode keys work in a focused sub-list, not only the root +m11 @desktop
 2026-10-13 desktop: Esc in a sub-list editor leaves the editor (or goes up one level), not the whole panel +m11 @desktop

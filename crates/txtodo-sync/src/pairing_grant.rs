@@ -26,6 +26,20 @@ pub struct PairingGrant {
     /// The sender's human's answer to "is this your own device?" (task
     /// `default-workspace-pairing-consent`). Sealed with the grant, so only the joiner reads it.
     pub own_device: bool,
+    /// The group-key epoch `group_key` belongs to (task `peer-prune`, ADR 0044). The initiator
+    /// hands over its **current** key; after a rotation that is not epoch 0, and a joiner that filed
+    /// it at epoch 0 would hold the key a removed device may still have. Appended last: a grant
+    /// from an older build lacks it (epoch 0, see [`PairingGrant::from_bytes`]) and an older reader
+    /// ignores it.
+    pub epoch: u32,
+}
+
+/// A grant as an older build encoded it, before `epoch` existed.
+#[derive(Deserialize)]
+struct LegacyGrant {
+    group_key: [u8; KEY_BYTES],
+    static_public: [u8; DEVICE_STATIC_KEY_BYTES],
+    own_device: bool,
 }
 
 impl fmt::Debug for PairingGrant {
@@ -34,6 +48,7 @@ impl fmt::Debug for PairingGrant {
             .field("group_key", &"<redacted>")
             .field("static_public", &hex(&self.static_public))
             .field("own_device", &self.own_device)
+            .field("epoch", &self.epoch)
             .finish()
     }
 }
@@ -68,8 +83,18 @@ impl PairingGrant {
         postcard::to_allocvec(self).map_err(PairingGrantError::Encode)
     }
 
-    /// Decodes what `PairingSession::unwrap_group_key` returned.
+    /// Decodes what `PairingSession::unwrap_group_key` returned. A grant from a build that predates
+    /// `epoch` decodes as epoch 0, which is all such a build ever had.
     pub fn from_bytes(bytes: &[u8]) -> Result<PairingGrant, PairingGrantError> {
-        postcard::from_bytes(bytes).map_err(PairingGrantError::Decode)
+        postcard::from_bytes(bytes).or_else(|new_err| {
+            postcard::from_bytes::<LegacyGrant>(bytes)
+                .map(|old| PairingGrant {
+                    group_key: old.group_key,
+                    static_public: old.static_public,
+                    own_device: old.own_device,
+                    epoch: 0,
+                })
+                .map_err(|_| PairingGrantError::Decode(new_err))
+        })
     }
 }

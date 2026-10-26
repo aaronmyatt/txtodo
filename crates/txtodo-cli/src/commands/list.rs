@@ -1,5 +1,6 @@
 //! Listings: todo.sh `_format` — number every line, drop blanks, keep lines matching every term,
 //! sort like `env LC_COLLATE=C sort -f -k2`, print zero-padded numbers, then the `N of M` footer.
+//! `list` leaves done tasks out unless a term asks for them; `listall` shows every line.
 
 use crate::{CliError, Ctx, store};
 use std::path::{Path, PathBuf};
@@ -126,9 +127,28 @@ pub fn list_pri(ctx: &Ctx, args: &[String]) -> Result<(), CliError> {
     Ok(())
 }
 
-/// `listall [TERMS]`: every line in todo.txt, done tasks included — they never leave the file any
-/// more, so this is `list` in every way that matters (todo.sh drew this distinction only because
-/// it split done tasks into a second file).
+/// `list [TERMS]`: the open tasks in todo.txt. Done tasks stay in the file now (`do` moves them to
+/// the bottom), so without this a plain `list` shows the whole history. A term that asks about
+/// completion itself (`is:done`, `-is:open`, …) is taken as asked, done lines included.
+pub fn list_open(ctx: &Ctx, terms: &[String]) -> Result<(), CliError> {
+    list_file(ctx, &ctx.paths.todo, &open_terms(terms))
+}
+
+/// `terms` plus `is:open`, unless one of them already names `is:open` or `is:done`.
+fn open_terms(terms: &[String]) -> Vec<String> {
+    let names_completion = |t: &String| {
+        let bare = t.strip_prefix('-').unwrap_or(t);
+        bare.eq_ignore_ascii_case("is:open") || bare.eq_ignore_ascii_case("is:done")
+    };
+    let mut out = terms.to_vec();
+    if !terms.iter().any(names_completion) {
+        out.push("is:open".to_owned());
+    }
+    out
+}
+
+/// `listall [TERMS]`: every line in todo.txt, done tasks included (todo.sh's `listall` read
+/// done.txt too; here done tasks never leave todo.txt).
 pub fn list_all(ctx: &Ctx, terms: &[String]) -> Result<(), CliError> {
     list_file(ctx, &ctx.paths.todo, terms)
 }

@@ -1,8 +1,8 @@
 //! `todo_lint` and `todo_conflicts_list`: thin wrappers over the daemon's `Lint` and
 //! `ListConflicts` RPCs — the same ones `txtodo lint` and `txtodo conflicts` reach (tasks
-//! `mcp-hygiene-parity`, `mcp-conflicts-parity`). `todo_conflicts_resolve` went with same-word
-//! review (ADR 0038); a duplicate copy goes with `todo_delete`. Split out of
-//! `grpc_read.rs`/`grpc_write.rs` for their file budgets.
+//! `mcp-hygiene-parity`, `mcp-conflicts-parity`). `todo_conflicts_list` reports duplicate lines
+//! (ADR 0032); `todo_conflicts_resolve` went with the needs_review flags (ADR 0038). Split out of
+//! `grpc_read.rs` for its file budget.
 //!
 //! `todo_fmt` is deliberately not here: it is the one command that rewrites lines it was not asked
 //! about, and it stays held until agent-principal attribution covers a whole-file rewrite.
@@ -43,7 +43,7 @@ pub async fn lint(
         .collect())
 }
 
-/// `todo_conflicts_list`: the document's duplicate groups (ADR 0032), as the daemon derives them.
+/// `todo_conflicts_list`: the document's duplicate groups, copies oldest first.
 pub async fn conflicts_list(
     mut client: TxtodoClient<Channel>,
     file: Option<RefPath>,

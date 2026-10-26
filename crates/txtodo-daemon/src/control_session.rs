@@ -10,8 +10,9 @@ use std::sync::{Mutex, PoisonError};
 
 use txtodo_model::{DeviceId, Ulid};
 use txtodo_store::WorkspaceId;
-use txtodo_sync::{ControlMessage, ControlSealError, GroupId, GroupKey, GroupKeys, KeyId, Link};
+use txtodo_sync::{ControlMessage, ControlSealError, GroupId, GroupKey, GroupKeys, Link};
 
+use crate::control_flow::Control;
 use crate::device_identity::DeviceIdentity;
 use crate::peer_keys::PeerSignal;
 use crate::workspace_offer_registry::{
@@ -21,94 +22,64 @@ use crate::workspace_registry::WorkspaceRegistry;
 
 /// Which group/epoch/key to seal under, bundled so `send_all_offers` stays under the
 /// arg-count budget — the same reason `txtodo_sync::sealed_ops::SealContext` exists.
-struct SealCtx<'a> {
-    group: GroupId,
-    epoch: u32,
-    key: &'a GroupKey,
+pub(crate) struct SealCtx<'a> {
+    pub(crate) group: GroupId,
+    pub(crate) epoch: u32,
+    pub(crate) key: &'a GroupKey,
 }
 
 /// One full exchange over an established connection. Runs on the caller's own thread, which must
 /// be a blocking one (`Link::send`/`recv` block, same invariant `lan_session.rs` documents).
-/// Returns what the peer's frames showed about its key, for `peer_keys.rs` (task sync-drift
-/// line 5).
+/// `dialed` is the peer this session dialed, `None` when it accepted: the dialer speaks first
+/// (`control_flow.rs`). Returns what the peer's frames showed about its key, for `peer_keys.rs`
+/// (task sync-drift line 5).
 pub(crate) fn drive_control_session(
     link: &mut dyn Link,
     identity: &DeviceIdentity,
     registry: &Mutex<WorkspaceRegistry>,
+    dialed: Option<DeviceId>,
 ) -> PeerSignal {
     let key = fetch_group_key(identity);
     record_offers_outcome(identity, &key);
-    let Some(key) = key.ok().flatten() else {
+    if key.ok().flatten().is_none() {
         return PeerSignal::Silent;
-    };
+    }
     let epoch = identity.group_epoch();
-    let Some(keys) = single_epoch_keys(epoch, key.clone()) else {
+    let Some(keys) = crate::group_epoch::retained(identity.key_store().as_ref(), epoch) else {
         return PeerSignal::Silent;
     };
-    let ctx = SealCtx {
-        group: identity.group(),
-        epoch,
-        key: &key,
-    };
-
-    if !send_all_offers(link, identity, registry, &ctx) {
+    let mut control = Control::new(link, identity, registry, keys, dialed);
+    if !control.start() {
         return PeerSignal::Silent;
     }
-    read_until_closed(link, identity, &ctx, &keys)
+    control.run()
 }
 
-/// Handles every message the peer sends until the link closes (`Opened` if any came) or one does
-/// not open (`OpenFailed`, which ends the session as before).
-fn read_until_closed(
-    link: &mut dyn Link,
-    identity: &DeviceIdentity,
-    ctx: &SealCtx<'_>,
-    keys: &GroupKeys,
-) -> PeerSignal {
-    let mut seen = PeerSignal::Silent;
-    let mut vouched = false;
-    loop {
-        match recv_control(link, ctx.group, keys) {
-            Ok(msg) => {
-                seen = PeerSignal::Opened;
-                // Once per session, to the first sender that is a direct own device: the list of
-                // ours (ADR 0029's amendment). An accepted session learns its peer only here.
-                if !vouched {
-                    vouched = true;
-                    let peer = crate::own_vouch::sender_of(&msg);
-                    if let Some(own) = crate::own_vouch::own_devices_for(identity, peer) {
-                        let _ = send_control(link, ctx, own);
-                    }
-                }
-                handle_one_message(identity, msg);
-            }
-            Err(PeerSignal::Silent) => return seen,
-            Err(failed) => return failed,
-        }
-    }
-}
-
-/// The three ways this can fail (keystore error, no key stored yet, corrupt length) used to
+/// The current epoch's group key. A keystore error, no key stored yet and a corrupt length used to
 /// collapse into one flat `control_channel_session_skipped_no_group_key` debug event at the call
 /// site — each now logs its own specific reason here instead, at the source. `Err` carries what a
 /// human should hear about (task control-channel-keystore-visibility); `Ok(None)` is "not paired
 /// yet", which is no problem.
 fn fetch_group_key(identity: &DeviceIdentity) -> Result<Option<GroupKey>, String> {
-    let stored = match identity
-        .key_store()
-        .get(KeyId::Group(identity.group_epoch()))
-    {
-        Ok(v) => v,
-        Err(e) => return Err(log_group_key_keystore_err(&e)),
-    };
-    let Some(bytes) = stored else {
-        return Ok(log_group_key_missing());
-    };
-    let raw = bytes.expose();
-    match raw.try_into() {
-        Ok(array) => Ok(Some(GroupKey::from_bytes(array))),
-        Err(_) => Err(log_group_key_corrupt(raw.len())),
+    let fetched = crate::group_epoch::fetch(identity.key_store().as_ref(), identity.group_epoch());
+    log_group_key_read(&fetched);
+    fetched
+}
+
+fn log_group_key_read(fetched: &Result<Option<GroupKey>, String>) {
+    match fetched {
+        Err(why) => log_group_key_unreadable(why),
+        Ok(None) => log_group_key_missing(),
+        Ok(Some(_)) => {}
     }
+}
+
+fn log_group_key_unreadable(why: &str) {
+    tracing::warn!(why, "control_channel_group_key_unreadable");
+}
+
+fn log_group_key_missing() {
+    tracing::debug!("control_channel_group_key_missing");
 }
 
 /// Puts the group-key read's outcome on the device's `LanStatus`, where `Health` and
@@ -118,36 +89,10 @@ fn record_offers_outcome(identity: &DeviceIdentity, key: &Result<Option<GroupKey
     identity.lan_status().set_offers_problem(problem);
 }
 
-fn log_group_key_keystore_err(e: &txtodo_sync::KeyStoreError) -> String {
-    tracing::warn!(error = %e, "control_channel_group_key_keystore_error");
-    format!("the keystore could not read the group key: {e}")
-}
-
-fn log_group_key_missing() -> Option<GroupKey> {
-    tracing::debug!("control_channel_group_key_missing");
-    None
-}
-
-fn log_group_key_corrupt(len: usize) -> String {
-    tracing::warn!(len, "control_channel_group_key_corrupt_length");
-    format!("the stored group key is {len} bytes, not 32")
-}
-
-fn single_epoch_keys(epoch: u32, key: GroupKey) -> Option<GroupKeys> {
-    let mut keys = GroupKeys::new();
-    match keys.insert(epoch, key) {
-        Ok(()) => Some(keys),
-        Err(e) => log_group_keys_insert_failed(&e),
-    }
-}
-
-fn log_group_keys_insert_failed(e: &txtodo_sync::CryptoError) -> Option<GroupKeys> {
-    tracing::warn!(error = %e, "control_channel_group_keys_insert_failed");
-    None
-}
-
-/// This device's currently-active workspaces, as `(id, display name)` pairs — never used as
-/// identity. The name is the one this device shows (`workspace_name::display_name`, task
+/// This device's lists, as `(id, display name)` pairs — never used as identity. Only lists
+/// (`is_list_id`: a list's id comes from its name) are offered (ADR 0043). A repo is carried by
+/// git, so no peer is told it exists; the default is on every device already, under one id, and a
+/// foreign peer is shown nothing. The name is the one this device shows (`workspace_name::display_name`, task
 /// workspace-vanity-name): the `txtodo.toml` name, else the folder's, else for a mirror what its
 /// own offering device called it (`offers`), so a third device learns the name, not the id.
 pub(crate) fn outbound_offers(
@@ -159,22 +104,19 @@ pub(crate) fn outbound_offers(
         .unwrap_or_else(PoisonError::into_inner)
         .list()
         .unwrap_or_default();
-    let default = crate::default_workspace::default_workspace_id();
     entries
         .into_iter()
+        .filter(|entry| crate::list_workspace::is_list_id(entry.id))
         .map(|entry| {
-            let name = crate::workspace_name::display_name(
-                entry.id,
-                &entry.root,
-                entry.id == default,
-                || offers.offered_name(entry.id),
-            );
+            let name = crate::workspace_name::display_name(entry.id, &entry.root, false, || {
+                offers.offered_name(entry.id)
+            });
             (entry.id, name)
         })
         .collect()
 }
 
-fn now_ms() -> u64 {
+pub(crate) fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
@@ -198,7 +140,7 @@ fn log_seal_failed(e: &txtodo_sync::ControlSealError) {
 
 /// `Err(Silent)` once the link is closed or idle, `Err(OpenFailed(kind))` for a frame that did not
 /// open (logged here at debug; the once-per-peer warning is `peer_keys.rs`'s).
-fn recv_control(
+pub(crate) fn recv_control(
     link: &mut dyn Link,
     group: GroupId,
     keys: &GroupKeys,
@@ -228,7 +170,7 @@ fn control_error_kind(e: &ControlSealError) -> &'static str {
 
 /// Sends this device's every currently-active workspace as a fresh `Offer`. Returns `false` the
 /// moment the link fails, so the caller stops instead of trying the rest.
-fn send_all_offers(
+pub(crate) fn send_all_offers(
     link: &mut dyn Link,
     identity: &DeviceIdentity,
     registry: &Mutex<WorkspaceRegistry>,
@@ -237,14 +179,6 @@ fn send_all_offers(
     let device = identity.device();
     let now_ms = now_ms();
     for (workspace_id, name) in outbound_offers(registry, identity.workspace_offers()) {
-        // The default goes out under this device's alias (task default-workspace-pairing-consent):
-        // a foreign peer mirrors it as a Remote workspace; an own device skips it, since it merges
-        // that list under the reserved id already.
-        let workspace_id = if workspace_id == crate::default_workspace::default_workspace_id() {
-            crate::default_workspace::default_alias(device)
-        } else {
-            workspace_id
-        };
         let msg = ControlMessage::Offer {
             sender: device,
             workspace_id: workspace_id.ulid().to_u128(),
@@ -258,7 +192,7 @@ fn send_all_offers(
     true
 }
 
-fn handle_one_message(identity: &DeviceIdentity, msg: ControlMessage) {
+pub(crate) fn handle_one_message(identity: &DeviceIdentity, msg: ControlMessage) {
     match msg {
         ControlMessage::Offer {
             sender,
@@ -272,6 +206,8 @@ fn handle_one_message(identity: &DeviceIdentity, msg: ControlMessage) {
         ControlMessage::OwnDevices { sender, devices } => {
             crate::own_vouch::record_own_devices(identity, sender, &devices);
         }
+        // Handled by the session itself (`control_flow.rs`), which holds the keys they move.
+        ControlMessage::Grant { .. } | ControlMessage::Epoch { .. } => {}
     }
 }
 

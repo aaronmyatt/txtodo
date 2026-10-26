@@ -32,6 +32,10 @@ pub struct WorkspaceInfoDto {
     /// name, else `default` or the folder's, else for a mirror what its offering device calls it.
     /// Empty from an older daemon.
     pub name: String,
+    /// Which carrier syncs it (task two-kinds-of-workspace, ADR 0043): `"list"` (txtodo syncs it
+    /// between the user's own devices; the default is one), `"repo"` (git does), or `""` from a
+    /// daemon that predates the field.
+    pub kind: &'static str,
 }
 
 /// Where a workspace keeps its root list and the folder for its `ref:` lines (task
@@ -80,6 +84,14 @@ fn load_state_name(raw: i32) -> &'static str {
     }
 }
 
+fn kind_name(raw: i32) -> &'static str {
+    match pb::WorkspaceKind::try_from(raw) {
+        Ok(pb::WorkspaceKind::List) => "list",
+        Ok(pb::WorkspaceKind::Repo) => "repo",
+        Ok(pb::WorkspaceKind::Unspecified) | Err(_) => "",
+    }
+}
+
 impl From<pb::WorkspaceInfo> for WorkspaceInfoDto {
     fn from(w: pb::WorkspaceInfo) -> WorkspaceInfoDto {
         WorkspaceInfoDto {
@@ -93,6 +105,7 @@ impl From<pb::WorkspaceInfo> for WorkspaceInfoDto {
             is_default: w.is_default,
             is_remote: w.is_remote,
             name: w.name,
+            kind: kind_name(w.kind),
         }
     }
 }
@@ -111,6 +124,21 @@ mod tests {
         };
         assert!(WorkspaceInfoDto::from(w).is_remote);
         assert!(!WorkspaceInfoDto::from(pb::WorkspaceInfo::default()).is_remote);
+    }
+
+    /// Task two-kinds-of-workspace: the switcher groups by this, and an older daemon says nothing.
+    #[test]
+    fn the_kind_reaches_the_dto_as_list_repo_or_nothing() {
+        let kind = |k: pb::WorkspaceKind| {
+            let w = pb::WorkspaceInfo {
+                kind: k as i32,
+                ..pb::WorkspaceInfo::default()
+            };
+            WorkspaceInfoDto::from(w).kind
+        };
+        assert_eq!(kind(pb::WorkspaceKind::List), "list");
+        assert_eq!(kind(pb::WorkspaceKind::Repo), "repo");
+        assert_eq!(kind(pb::WorkspaceKind::Unspecified), "");
     }
 
     /// Task workspace-vanity-name: the switcher shows this name for a mirror.

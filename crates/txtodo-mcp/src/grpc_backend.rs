@@ -93,7 +93,8 @@ impl GrpcMcpBackend {
         let agent = agent.map(|(token_id, name)| pb::AgentPrincipal { token_id, name });
         GrpcMcpBackend {
             ctx: GrpcCtx {
-                client: TxtodoClient::new(channel),
+                client: TxtodoClient::new(channel)
+                    .max_decoding_message_size(txtodo_proto::MAX_MESSAGE_BYTES),
                 agent,
             },
         }

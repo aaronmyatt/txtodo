@@ -5,12 +5,14 @@ Protobuf definitions and generated gRPC types.
 
 ## Public interface
 `ListFiles`, `GetFile`, `Watch`, `Apply`, `History`, `Undo`, `Checkout`, `Health`,
-`ListConflicts`, `ResolveConflict`, `GetNotes`, `EditNotes`, `PairOffer`, `PairAccept`,
+`WatchRequest.shows_notices` (ADR 0041: the daemon holds its own notices while one is open). `ListConflicts` (duplicate groups only; `ResolveConflict`, `ReviewFlag`, `Resolution` and the
+`flags`/`review` fields went with ADR 0038, their numbers `reserved`), `GetNotes`, `EditNotes`, `PairOffer`, `PairAccept`,
 `PairConfirmSas`, `PairAwaitPeer` (plan M4 `sync-pairing`'s LAN wiring pass: the initiator polls
 this — `PairResult.sas` empty means "still waiting" — to learn a joiner's `PairAccept` has reached
 it over the real LAN transport and show a real SAS, without the RPC itself ever blocking),
 `TokenCreate`, `TokenList`, `TokenRevoke`, `OpLogStream` (plan M7),
-`DeviceList`, `DeviceRemove` (plan M4 tasks/sync-device-remove),
+`DeviceList` (a removed row carries `removed_reason`, `removed_by`, `removed_at_ms`; task `peer-prune`), `DeviceRemove` (plan M4 tasks/sync-device-remove),
+`Health.dropped_from_group` (task `peer-prune`: this device was left out of the group and has to pair again),
 `DebugSetGroupKey` (plan M4 `sync-lan-transport`, TEST-ONLY — refused unless the daemon was
 started with `TXTODO_TEST_HOOKS=1`).
 `UniversalTasks` (task `tui-revamp/universal-rpc`, 2026-09-25): device-level (no selector), every
@@ -80,12 +82,31 @@ beside the root, never deleted) and reopens the empty folder under the same id, 
 from a paired peer. `dry_run` changes nothing. The response names the backup folder, what moved,
 and the devices that offered the workspace lately. UNIMPLEMENTED from an older daemon.
 
+`WorkspaceBind` (task spike-txtodo-should-merge-remote-workspa, 2026-10-17): device-level. Moves a
+Remote mirror into a folder: the folder's own copy (and the workspace registered there) moves aside
+as for a rejoin, the mirror's `.txtodo/` and documents move in, and the mirror's id answers at the
+folder. `dry_run` changes nothing. The response names the backup folder, what moved each way, and
+the workspace it replaced. UNIMPLEMENTED from an older daemon.
+
 `WorkspaceInfo.name` (field 12, task workspace-vanity-name, 2026-09-26): the name to show for a
 workspace, display only. The daemon fills it from `name` in the workspace's `txtodo.toml` (which
 syncs, so paired devices agree), else a mirror's offered name, else `default` or the folder name.
 Empty from an older daemon. `WorkspaceRename(WorkspaceRenameRequest { workspace_id, name })` returns
 `WorkspaceInfo`: device-level like `WorkspaceRemove`, sets or clears that `name` line (as ops, so it
 syncs). UNIMPLEMENTED from an older daemon.
+
+`WorkspaceInfo.kind` (field 13, `WorkspaceKind`: list or repo, task two-kinds-of-workspace, ADR 0043):
+which carrier syncs the workspace, read off its root by the daemon and never stored. `ListEnsure`
+(`{ name }` to `{ workspace, created }`), `ListRename` (`{ list, new_name }` to `WorkspaceInfo`) and
+`ListRemove` (`{ list }` to `{ removed, moved_to }`): device-level, no selector, for the named lists
+under `<data dir>/lists/`. A list's id comes from its name, so `ListEnsure` of an existing list
+returns it unchanged. UNSPECIFIED kind / UNIMPLEMENTED from an older daemon.
+
+`Repos` (`{ add_roots, remove_roots, scan, wait }` to `{ roots, last_scan_ms, running, found, registered }`)
+and `MirrorsRetire` (`{ workspace_id, dry_run }` to the `RetiredMirror`s) (task two-kinds-of-workspace, ADR
+0043): device-level. `Repos` edits the folders the daemon scans for git clones that hold a todo list and
+starts a scan; one RPC for the family keeps the daemon's two `Txtodo` impls short. `MirrorsRetire` moves
+a Remote mirror aside (never deletes) and un-registers it. UNIMPLEMENTED from an older daemon.
 
 `ConflictsResponse.duplicates` (field 2) and `Change.duplicate_groups` (field 6), ADR 0032 (task
 sync-drift/duplicate-flags, 2026-10-01): a file's exact-duplicate lines as `DuplicateGroup`s

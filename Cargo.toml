@@ -4,7 +4,7 @@ members = ["crates/*", "apps/desktop/src-tauri", "relay"]
 exclude = ["crates/txtodo-core/fuzz"]   # cargo-fuzz crate: nightly-only, built via `just fuzz`
 
 [workspace.package]
-version = "0.0.22"
+version = "0.0.27"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.95"
@@ -16,6 +16,7 @@ txtodo-query     = { path = "crates/txtodo-query" }
 txtodo-model     = { path = "crates/txtodo-model" }
 txtodo-store     = { path = "crates/txtodo-store" }
 txtodo-crdt      = { path = "crates/txtodo-crdt" }
+txtodo-engine    = { path = "crates/txtodo-engine" }
 txtodo-sync      = { path = "crates/txtodo-sync" }
 txtodo-proto     = { path = "crates/txtodo-proto" }
 txtodo-mcp       = { path = "crates/txtodo-mcp" }

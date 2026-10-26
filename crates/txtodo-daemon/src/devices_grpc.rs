@@ -16,6 +16,7 @@ use txtodo_proto::v1 as pb;
 use txtodo_store::{DeviceRow, MAX_OPS_PER_READ};
 
 use crate::device_remove::RemoveDeviceError;
+use crate::removal_why::{self, Removal};
 use crate::server::TxtodoService;
 
 /// The caveat every successful, non-idempotent removal carries (plan M4
@@ -50,7 +51,12 @@ fn skew_of(last_known_wall_ms: Option<u64>, sampled_at_ms: u64) -> (pb::SkewStat
 }
 
 /// `own`: the row's own-device flag (task default-workspace-pairing-consent).
-fn to_pb(row: DeviceRow, self_device: DeviceId, now_ms: u64, own: bool) -> pb::Device {
+fn to_pb(
+    row: DeviceRow,
+    (self_device, now_ms): (DeviceId, u64),
+    own: bool,
+    removal: Option<Removal>,
+) -> pb::Device {
     // `record_peer_clock` writes the sample and `last_seen` together, so `last_seen` is when it was
     // read. Against `now_ms` instead, a peer quiet for 5 min would read as that far behind.
     let sampled_at_ms = row.last_seen_ms.unwrap_or(now_ms);
@@ -66,6 +72,9 @@ fn to_pb(row: DeviceRow, self_device: DeviceId, now_ms: u64, own: bool) -> pb::D
         skew_status: skew_status as i32,
         skew_ms,
         own_device: own,
+        removed_reason: removal.map_or_else(String::new, |r| r.why.as_str().to_string()),
+        removed_by: removal.map_or_else(String::new, |r| r.by.ulid().to_string()),
+        removed_at_ms: row.removed_at_ms.unwrap_or(0),
     }
 }
 
@@ -136,15 +145,21 @@ impl TxtodoService {
         let rows = store
             .list_devices()
             .map_err(|e| Status::internal(e.to_string()))?;
-        let owns: Vec<bool> = rows
+        let extras: Vec<(bool, Option<Removal>)> = rows
             .iter()
-            .map(|r| store.is_own_device(r.device).unwrap_or(false))
+            .map(|r| {
+                let own = store.is_own_device(r.device).unwrap_or(false);
+                let removal = r
+                    .removed_at_ms
+                    .and_then(|_| removal_why::read(&store, r.device));
+                (own, removal)
+            })
             .collect();
         drop(store);
         let devices = rows
             .into_iter()
-            .zip(owns)
-            .map(|(r, own)| to_pb(r, self_device, now_ms, own))
+            .zip(extras)
+            .map(|(r, (own, removal))| to_pb(r, (self_device, now_ms), own, removal))
             .collect();
         Ok(Response::new(pb::DeviceListResponse { devices }))
     }
@@ -210,7 +225,15 @@ impl TxtodoService {
                     .collect(),
             })
             .collect();
-        let pending_ops = pending_ops_since(self, &active_peers)?;
+        // A parked peer holds no key we share (`peer_keys.rs`), so no sync reaches it until it pairs
+        // again; counting it held the number at everything made since it was last seen (3930 and
+        // growing, on 2026-10-17). It stays in `peers`, marked parked.
+        let reachable: Vec<DeviceRow> = active_peers
+            .iter()
+            .filter(|r| !keys.is_parked(r.device))
+            .cloned()
+            .collect();
+        let pending_ops = pending_ops_since(self, &reachable)?;
         Ok(Response::new(pb::SyncStatusResponse {
             peers,
             pending_ops,
@@ -294,10 +317,10 @@ mod tests {
         let me = DeviceId::new(Ulid::from_u128(1));
         let seen = 10 * MAX_PEER_SKEW_AHEAD_MS;
         let hour_later = seen + 60 * 60 * 1_000;
-        let in_step = to_pb(row(seen, seen), me, hour_later, true);
+        let in_step = to_pb(row(seen, seen), (me, hour_later), true, None);
         assert_eq!(in_step.skew_status, pb::SkewStatus::Ok as i32);
         let lead = 7 * 60 * 1_000;
-        let ahead = to_pb(row(seen + lead, seen), me, hour_later, true);
+        let ahead = to_pb(row(seen + lead, seen), (me, hour_later), true, None);
         assert_eq!(ahead.skew_status, pb::SkewStatus::Ahead as i32);
         assert_eq!(ahead.skew_ms, lead);
     }

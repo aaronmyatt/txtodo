@@ -22,8 +22,11 @@ import { friendlySchemaError } from "./schemaTooNew";
 // demo tasks instead of any seeded fixture). `import.meta.env.MODE` is Vite's own build-time mode
 // string (https://vite.dev/guide/env-and-mode.html#modes) — "e2e" only when `--mode e2e` is
 // passed, so this changes nothing for the real Tauri app or the plain `npm run dev` preview.
+// `--mode web` (ADR 0042) aliases the same imports to src/lib/web/ (txtodo-web in a Worker), so it
+// takes the "real" branch too.
 function hasTauri(): boolean {
-	return (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) || import.meta.env.MODE === "e2e";
+	const mode = import.meta.env.MODE;
+	return (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) || mode === "e2e" || mode === "web";
 }
 
 // tasks/logging-frontend (root todo.txt ref:logging-frontend): frontend-only correlation id, minted

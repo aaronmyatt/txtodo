@@ -17,6 +17,7 @@ mod mirror;
 mod ops;
 mod projections;
 mod registry;
+mod registry_scan;
 mod tokens;
 
 pub use commit::{CommitExtras, prev_hash_key};
@@ -34,6 +35,7 @@ pub use projections::{MAX_PROJECTION_BYTES, Projection, Snapshot};
 pub use registry::{
     MAX_WORKSPACES_PER_READ, NewWorkspaceEntry, Registry, WorkspaceId, WorkspaceRow,
 };
+pub use registry_scan::{MAX_SCAN_ROOT_LEN, MAX_SCAN_ROOTS};
 pub use tokens::{MAX_TOKENS_PER_READ, NewToken, TokenError, TokenRecord};
 
 use rusqlite::Connection;

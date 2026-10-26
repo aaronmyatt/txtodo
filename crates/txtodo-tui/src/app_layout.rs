@@ -29,7 +29,7 @@ pub async fn follow_root_list(
         return Ok(None);
     }
     state.path = path;
-    let watch = daemon.watch(vec![state.path.clone()]).await?;
+    let watch = daemon.watch(Vec::new()).await?; // every list, as `Watching::open`
     let file = daemon.get_file(&state.path).await?;
     rebaseline(state, &file);
     Ok(Some(watch))

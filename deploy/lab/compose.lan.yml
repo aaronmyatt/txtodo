@@ -20,6 +20,9 @@ x-device-env: &device-env
   TXTODO_NO_AUTOSTART: "1"
   TXTODO_NO_SERVICE: "1"
   TXTODO_LOG: ${LAB_LOG}
+  # How long a peer may be silent before it is dropped (ADR 0044): the daemon's own default, a week,
+  # unless a scenario shortens it (prune).
+  TXTODO_PRUNE_QUIET_AFTER: ${LAB_PRUNE_QUIET_AFTER:-7d}
   # Read only when LD_PRELOAD loads libfaketime (clock-skew scenario). The file holds the offset
   # (e.g. "+7m") and is re-read every second, so a scenario can move a device's clock at runtime.
   # https://github.com/wolfcw/libfaketime#readme

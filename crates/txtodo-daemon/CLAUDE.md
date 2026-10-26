@@ -94,6 +94,13 @@ multiplex every workspace's traffic — not done by this task).
   directly too, unmodified, specifically so whitebox tests that construct one against a single
   already-open `Workspace` (bypassing the catalog, via `serve::serve` rather than
   `serve::serve_global`) need zero changes.
+- The engine moved out (ADR 0042, 2026-10-17): `state*`, `fields`, `text_history`, `textedit`,
+  `mutation*`, `reconcile`, `reconcile_sidecar`, `identity_*`, `duplicates`, `contents`,
+  `sync_park`, `op_set_hash` and the rest of the pure modules live in `txtodo-engine`, and
+  `lib.rs` re-exports them under the same names, so `crate::state::DocState` still resolves.
+  `sync_ops::apply_leniently`, `expected::Hash` and `actor::hash_of` are re-exports too. Their
+  unit tests went with them; the four test seams come through the engine's `test-support`
+  feature (a dev-dependency here).
 - Module map: `workspace` (registry, device id, discovery) → `actor` + `external` (FileActor:
   open/recover, apply, external change, commit, undo, checkout) ← `handle` (messages, replies) ·
   `state` + `fields` (DocState, every OpKind applied) · `reconcile` + `fastid` (pure diff → ops;
@@ -347,30 +354,109 @@ multiplex every workspace's traffic — not done by this task).
 - Own-device consent (task `default-workspace-pairing-consent`, 2026-09-24): `PairConfirmSas`
   carries the human's "is this your own device?" answer; it rides `JoinerHello`/`PairingGrant` and
   each side registers the peer with `own = mine && theirs` (`register_device_as`). A sync session
-  sends its `Greet`s only after the peer's link `Hello`; `lan_session_gate.rs` keeps the reserved
-  default for an own peer and swaps it for this device's `default_alias` otherwise (unknown peers
-  too). Control sessions offer the default under that alias; `workspace_catalog_mirror.rs` skips an
-  own device's alias, whichever peer relays it (a peer re-offers its mirrors), and mirrors any
-  other as a Remote workspace. `PairResult.kept_own_workspace`
-  says when a joiner kept its default. `tests/e2e/default_workspace_foreign.rs` is the two-daemon proof.
+  sends its `Greet`s only after the peer's link `Hello`; `lan_session_gate.rs` keeps the default and
+  every list for an own peer and carries neither to any other (unknown peers too). Until task
+  `two-kinds-of-workspace` (ADR 0043) the default reached a foreign peer under a derived alias, as a
+  Remote mirror; the alias, that mirror and its skip pass are gone. `tests/e2e/lists_sync.rs`
+  (`a_device_that_is_not_own_gets_no_list`) is the two-daemon proof.
   Own carries across one shared device (ADR 0029's 2026-10-02 amendment, `own_vouch.rs`): in each
   control session a device sends `ControlMessage::OwnDevices` (its direct own devices) once, to the
   first sender that is direct own, and takes one only from a direct own sender
-  (`IdentityStore::set_own_vouches`). `is_own_device` counts those, so the gate and the alias skip
-  treat a vouched device as own; the mirror pass drops a Remote mirror of a now-own alias; a change
-  bumps `LivePeers::own_generation`, which ends live sync sessions so they greet again.
+  (`IdentityStore::set_own_vouches`). `is_own_device` counts those, so the gate and the list
+  offers treat a vouched device as own; a change bumps `LivePeers::own_generation`, which ends live sync sessions so they greet again.
   Known gap: the file carrier is not gated (it has no peer to ask about).
 - Offers problem (task `control-channel-keystore-visibility`, 2026-09-24): each control session
   records its group-key read on the device's `LanStatus` (`offers_problem`: a keystore failure or a
   corrupt key, with its time; a clean read clears it). `Health.offers_problem(_age_ms)` and
   `WorkspacePendingOffersResponse.offers_problem(_age_ms)` carry it, so an empty offer list can say
   "blocked" instead of "nothing offered".
-- `workspace_catalog_mirror.rs` (task `remote-workspace-mirror`, 2026-09-24): every workspace a
-  paired device offers is mirrored on its own at `<state dir>/remote/<workspace-id>/`, opened, and
-  flagged `WorkspaceInfo.is_remote` (derived from the root, no registry column). An id the registry
-  ever held (active or removed) is never mirrored; a declined offer is ignored until restart.
-  `WorkspaceAcceptOffer` ignores `local_dir`. Offers travel the relay control channel and, since
-  the same day, a LAN control session too.
+- `workspace_catalog_mirror.rs` (task `remote-workspace-mirror`, 2026-09-24; cut down by task
+  `two-kinds-of-workspace`): the offer pass. Only a list is offered (`control_session.rs::outbound_offers`
+  keeps `is_list_id` ids) and only an own device's offer makes one (`mirror_offered_list`); every other
+  offer, from an older build, is consumed and ignored. An id the registry ever held (active or removed)
+  is never made again; a declined offer is ignored until restart. `WorkspaceAcceptOffer` accepts a
+  list and refuses anything else. `remote/<id>/` mirrors an older build made still show as
+  `WorkspaceInfo.is_remote` (derived from the root) until `MirrorsRetire` moves them aside. Offers
+  travel the relay control channel and a LAN control session.
+- Named lists (task `two-kinds-of-workspace`, ADR 0043): `list_workspace.rs`'s `ListName` (ASCII
+  `[a-z0-9_-]`, 1 to 48, never `default` or a Windows device name) and its `id()`, `blake3("txtodo-list:"
+  + name)` under a fixed past timestamp field (golden ids pinned in `list_workspace_tests.rs`: the
+  derivation is permanent). `workspace_catalog_lists.rs`: `set_lists_root` (`boot_dirs.rs` sets it
+  beside `remote/`), `is_list_root`, `ensure_list` (make `lists/<name>/`, register under the name's
+  id, open it; `ALREADY_EXISTS` for a list renamed away from that name or another list showing it),
+  `find_list` (shown name, else the name it was made under), `remove_list` (close, move aside as a
+  rejoin does, un-register; the other devices keep it). `list_rpc.rs`: `ListEnsure`, `ListRename`
+  (the `WorkspaceRename` write after the new name is checked), `ListRemove`. `WorkspaceInfo.kind` is
+  List for the default and anything in the lists root, Repo for every other folder. Pairing never
+  re-keys any workspace (the joiner's re-key, `adopt_offered_workspace_id`, is gone): a list's id is its
+  name's, the default's is reserved, a repo is not synced. `PairResult.kept_own_workspace` is never set now. A removed list made again comes
+  back under its id through `WorkspaceRegistry::restore`.
+- Repos (task `two-kinds-of-workspace`, ADR 0043): `repo_scan.rs` is a pure walk under the scan roots for
+  a `.git` folder whose top holds a `todo.txt` or `txtodo.toml` (depth 8, 250k folders, 500 repos; hidden,
+  `node_modules`, `target`, `vendor`, `dist`, `build`, a top-level `Library` and, on macOS, the home folder's gated
+  folders (`Desktop`, `Documents`, `Downloads`, `Movies`, `Music`, `Pictures`: reading one raises a system permission
+  prompt) never entered unless a scan root is at or inside one, which the person linked; no symlink
+  followed; a `.git` file, a worktree or submodule, is left to a first touch). `workspace_catalog_repos.rs`
+  runs it: `run_scan` registers the new ones (never opens them, never brings back one the person removed),
+  records the time, and `start_repo_scan` schedules it 5 s after start and every 6 h (a client's `Repos { scan }` on open runs one too). `boot_dirs.rs` seeds
+  `[$HOME]` as the default root only when no env var moved the socket or registry, so a test never walks
+  the real home. `WorkspaceRegistry::add` writes `.txtodo/` into a new clone's own `info/exclude`
+  (`repo_exclude.rs`, with no `git` run) and readies it for git (`repo_git.rs`: `todo.txt merge=txtodo` and
+  `done.txt merge=union` in `.git/info/attributes`, `[merge "txtodo"] driver = txtodo merge-driver %O %A %B` in
+  `.git/config`, each only if missing, nothing tracked written); every scan readies the registered repos
+  again. `repos_rpc.rs`: the `Repos` RPC edits the roots and starts a scan.
+- `group_epoch.rs` (task `peer-prune`, ADR 0044): the group key as the epochs a device holds it. `EpochKey`
+  is a key with its epoch; `fetch(store, epoch)` reads one, `retained(store, current)` every epoch up to the
+  current one that the keystore holds (the newest 16), `verify_key(keys, epoch)` the key a batch sealed under
+  that epoch was signed with. Live sessions, the file carrier and the control channel seal under the
+  device's current epoch (`Workspace::group_epoch`) and open under any retained one, verifying a batch with
+  the key of the epoch its frame names (`txtodo_sync::sealed_epoch`). `DeviceIdentity::set_group_epoch`
+  bumps the live-peers generation, so a rotation ends live sessions and they reseal. At epoch 0, as every
+  device is today, nothing on the wire changed.
+- Rotation (task `peer-prune`, ADR 0044). `device_remove.rs`: `DeviceIdentity::remove_device` (the
+  `Workspace` method delegates) makes the next epoch's key, records who made it and whom it dropped
+  (`epoch_info.rs`, `meta` `group_epoch_info:<n>`), tombstones the target, and moves the epoch, which ends
+  live sync sessions. It no longer advances a kept peer's `key_epoch`: that is the newest epoch the peer is
+  known to hold, set when the peer says so. `group_rotation.rs`: `grants_for(identity, peer, peer_epoch)`
+  makes the grant chain again from the keystore (no store of grants), each sealed under the epoch before;
+  a device the rotation dropped gets none. `apply_grant` opens a grant with this device's long-term key,
+  files the key, moves the epoch, drops the devices it leaves out, and settles two keys for one epoch (the
+  lower minter id wins). `control_flow.rs` is the order of a control session: the dialer says `Epoch` first,
+  the acceptor answers, a device ahead sends the grants, then both send offers under the current epoch; a
+  grant is answered with `Epoch`; a frame from a removed device ends the session. Known gaps: a
+  file-carrier-only device has no control channel to receive a grant on; a device that loses the tie-break
+  keeps its own drops (they converge when each device's own clock prunes).
+- Pruning (task `peer-prune`, ADR 0044): `prune_loop.rs` is a per-device task (`carriers.rs` starts it) that on
+  each resync tick runs `DeviceIdentity::remove_device` on every peer `prune_stale.rs` calls stale, so the key
+  rotates and the grant goes out in the control channel. Stale is a pure verdict on this device's own `devices`
+  row: parked (`peer_keys`) and silent for `prune_parked_after` (default 1 day), or merely silent for
+  `prune_quiet_after` (default 7 days); `0` is that rule off, both off starts no task. Silence is counted from
+  the newest of `last_seen`, `paired_at` and `up_since` (`prune_presence.rs`: moved to now by a tick more than
+  10 minutes after the last, or than half the shortest threshold when that is less (the lab's 25 s), saved in `meta`, so a laptop that slept or was off for a week drops nobody on waking).
+  A peer with a session open is touched each tick (`last_seen` is otherwise set only at its `Hello`).
+  A device that is `dropped_from_group` prunes nobody: it hears nothing it can open, so every peer reads as quiet
+  (the lab saw one wake, prune its old peers and mint a key of its own that nobody else held).
+  `prune_config.rs`: `$TXTODO_PRUNE_PARKED_AFTER`/`$TXTODO_PRUNE_QUIET_AFTER`, else the same keys in the CLI's
+  `config.toml` (the daemon reads that file itself; values are `7d`/`12h`/`90m`/`30s` or integer seconds), else
+  the defaults; an unreadable value is skipped with a `prune_config_value_ignored` warning. Logs `peer_pruned`
+  (peer, why, epoch) and, once per peer, `peer_prune_failed`. Known gap: a peer the rotation cannot be made for
+  stays in place and is retried every tick. `removal_why.rs` keeps why and by whom a row was removed (`meta`
+  `removed_why:<id>`; `manual`, `pruned_quiet`, `pruned_parked`, `left_out` for one dropped by following a grant) and
+  `DeviceList` sends it as `removed_reason`/`removed_by`/`removed_at_ms`; a row removed before it reads "".
+  A device the group left out learns it from `peer_keys.rs`: 3 `unknown_epoch` opens in a row from anyone, or a run of
+  one or more that has lasted two resync rounds (5 s at least; a dropped device is dialed only now and then), none ended by an
+  opened frame, a new epoch or a new group, set `Health.dropped_from_group`. A removed device is still dialed (growing
+  backoff, its `Hello` refused) so it hears; the relay paths skip it (a relay device dials the pruner itself).
+  Its failed dials back off to a minute, so a pairing, a new epoch or a new group bumps `LivePeers::dial_generation` and
+  every dial loop forgets its backoff (`lan_peers::follow_dial_generation`): without it a device paired again waited out
+  the minute (found by the e2e, which fails with a long enough apart phase when the reset is off).
+  `tests/e2e/prune_repair.rs` is the two-daemon proof: B frozen past A's
+  4 s threshold is dropped, edits on both sides stay apart, and pairing again brings every line to both.
+- `mirrors_retire.rs` (task `two-kinds-of-workspace`, ADR 0043): `MirrorsRetire { workspace_id, dry_run }`
+  moves each Remote mirror an older build made (`remote/<id>/`) aside and un-registers it, never deleting
+  text. The same move a rejoin makes (`rejoin_backup::move_aside` into `<id>.rejoin-backup-<UTC time>`),
+  under the held load slot (`close_quietly`, then the registry removal). The emptied folder goes if it
+  ends empty. A removed id is never mirrored again. A dry run only reports; a refusal reopens the mirror.
 - `workspace_rejoin.rs` + `rejoin_backup.rs` (task sync-drift line 8, 2026-09-26): `WorkspaceRejoin`
   drops this device's copy of one workspace and takes a paired peer's. Refused, nothing changed,
   for the default, a missing root, a root overlapping another registered one, or when no paired
@@ -383,6 +469,16 @@ multiplex every workspace's traffic — not done by this task).
   something new. The same registry row reopens the empty folder with a fresh store, which pulls the
   peer's whole log on the next session. `tests/e2e/workspace_rejoin.rs` is the two-daemon proof.
   `workspace_registry_grpc.rs` holds the registry handlers, split from `global_service.rs`.
+- `workspace_bind.rs` (task spike-txtodo-should-merge-remote-workspa, 2026-10-17): `WorkspaceBind`
+  moves a Remote mirror into a folder, for a repo cloned on two devices (each minted its own id).
+  Refused, nothing changed, unless the id is a mirror; for the default's folder, one inside the
+  mirrors' folder, one sharing lists with another workspace, or one on another disk. It holds both
+  load slots, closes the mirror and the workspace registered at the folder, moves the folder's
+  copy aside as a rejoin does, renames the mirror's `.txtodo/` and documents in
+  (`rejoin_backup::move_into`), removes the folder's workspace and points the mirror's row at the
+  folder (`WorkspaceRegistry::set_root`), then opens it there: same store, nothing re-sent. A
+  refusal before the registry changes moves everything back and reopens both where they were.
+  `tests/e2e/workspace_bind.rs` is the two-daemon proof.
 - `workspace_name.rs` + `workspace_rename.rs` (task workspace-vanity-name, 2026-09-26): a
   workspace's shown name, display only. Stored as a top-level `name` line in `txtodo.toml`, which
   already syncs as a text document (`layout_sync.rs`); `WorkspaceInfo.name` is that name, else
@@ -583,4 +679,4 @@ multiplex every workspace's traffic — not done by this task).
   real bugs found only by actually driving the handshake end to end, not by unit-testing either
   side in isolation — a lesson for anything that touches this file again.
 - May depend only on: txtodo-core, txtodo-query, txtodo-model, txtodo-store, txtodo-crdt,
-  txtodo-sync, txtodo-proto, txtodo-mcp.
+  txtodo-engine, txtodo-sync, txtodo-proto, txtodo-mcp.

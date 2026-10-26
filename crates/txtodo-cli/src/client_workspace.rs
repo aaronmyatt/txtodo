@@ -141,6 +141,26 @@ impl Daemon {
         Ok(rep.into_inner())
     }
 
+    /// Moves a Remote mirror into the folder `root` (task spike-txtodo-should-merge-remote-workspa);
+    /// `dry_run` only says what would move.
+    pub fn workspace_bind(
+        &mut self,
+        workspace_id: &str,
+        root: &str,
+        dry_run: bool,
+    ) -> Result<pb::WorkspaceBindResponse, ClientError> {
+        let req = pb::WorkspaceBindRequest {
+            workspace_id: workspace_id.to_owned(),
+            root: root.to_owned(),
+            dry_run,
+        };
+        let rep = self
+            .rt
+            .block_on(self.client.workspace_bind(req))
+            .map_err(ClientError::Rpc)?;
+        Ok(rep.into_inner())
+    }
+
     /// Discards a pending offer; `false` when there was no such offer.
     pub fn workspace_decline_offer(
         &mut self,
@@ -156,5 +176,71 @@ impl Daemon {
             .block_on(self.client.workspace_decline_offer(req))
             .map_err(ClientError::Rpc)?;
         Ok(rep.into_inner().declined)
+    }
+
+    /// The device-global daemon, with no workspace selected: for the commands that are about the
+    /// registry, not a document (`--list NAME` asks it where a list lives). `None` when its socket
+    /// is not there.
+    pub fn global(env: &crate::config::Env) -> Result<Option<Daemon>, ClientError> {
+        let socket = crate::config::global_socket_path(env);
+        if !socket.exists() {
+            return Ok(None);
+        }
+        Daemon::connect(socket, None).map(Some)
+    }
+
+    /// Makes the named list when this device has none (task two-kinds-of-workspace); a list that
+    /// is already here comes back with `created` false.
+    pub fn list_ensure(&mut self, name: &str) -> Result<pb::ListEnsureResponse, ClientError> {
+        let req = pb::ListEnsureRequest {
+            name: name.to_owned(),
+        };
+        let rep = self.rt.block_on(self.client.list_ensure(req));
+        Ok(rep.map_err(ClientError::Rpc)?.into_inner())
+    }
+
+    /// Changes the name a list shows; its id and folder stay.
+    pub fn list_rename(
+        &mut self,
+        list: &str,
+        new_name: &str,
+    ) -> Result<pb::WorkspaceInfo, ClientError> {
+        let req = pb::ListRenameRequest {
+            list: list.to_owned(),
+            new_name: new_name.to_owned(),
+        };
+        let rep = self.rt.block_on(self.client.list_rename(req));
+        Ok(rep.map_err(ClientError::Rpc)?.into_inner())
+    }
+
+    /// Removes a list from this device: its folder moves aside, never deleted.
+    pub fn list_remove(&mut self, list: &str) -> Result<pb::ListRemoveResponse, ClientError> {
+        let req = pb::ListRemoveRequest {
+            list: list.to_owned(),
+        };
+        let rep = self.rt.block_on(self.client.list_remove(req));
+        Ok(rep.map_err(ClientError::Rpc)?.into_inner())
+    }
+
+    /// Moves the Remote mirror `id` (every one when empty) aside and un-registers it; a dry run
+    /// only reports (task two-kinds-of-workspace).
+    pub fn mirrors_retire(
+        &mut self,
+        id: &str,
+        dry_run: bool,
+    ) -> Result<pb::MirrorsRetireResponse, ClientError> {
+        let req = pb::MirrorsRetireRequest {
+            workspace_id: id.to_owned(),
+            dry_run,
+        };
+        let rep = self.rt.block_on(self.client.mirrors_retire(req));
+        Ok(rep.map_err(ClientError::Rpc)?.into_inner())
+    }
+
+    /// The repo-scan roots and scan (task two-kinds-of-workspace): changes the roots, starts a scan
+    /// when asked, and answers the state. All-default reads it.
+    pub fn repos(&mut self, req: pb::ReposRequest) -> Result<pb::ReposResponse, ClientError> {
+        let rep = self.rt.block_on(self.client.repos(req));
+        Ok(rep.map_err(ClientError::Rpc)?.into_inner())
     }
 }

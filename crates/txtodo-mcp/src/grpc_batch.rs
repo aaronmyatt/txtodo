@@ -86,8 +86,14 @@ async fn apply_batch_op(ctx: GrpcCtx, op: TodoOp, workspace: WorkspaceArg) -> Re
         TodoOp::TodoEdit { id, patch } => {
             edit(ctx, id, patch, workspace).await?;
         }
-        TodoOp::TodoMove { id, before, after } => {
-            crate::grpc_move::move_task(ctx, id, move_anchor(before, after)?, workspace).await?;
+        TodoOp::TodoMove {
+            id,
+            before,
+            after,
+            to_file,
+        } => {
+            let anchor = move_anchor(before, after, to_file)?;
+            crate::grpc_move::move_task(ctx, id, anchor, workspace).await?;
         }
         TodoOp::TodoDelete { id, confirm } => {
             delete(ctx, id, confirm, workspace).await?;

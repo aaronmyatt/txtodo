@@ -54,6 +54,17 @@ impl Drop for GlobalDaemon {
 
 /// Runs `txtodo` against `daemon`'s socket, from `dir` — which must have no `.txtodo/txtodod.sock`
 /// of its own, so `client::select` has nothing to fall back to except the global daemon.
+/// Registers `dir`: a read never registers a folder (task cli-no-implicit-register).
+fn register(daemon: &GlobalDaemon, dir: &Path) {
+    let root = dir.display().to_string();
+    let out = txtodo(daemon, dir, &["workspace", "add", &root]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
 fn txtodo(daemon: &GlobalDaemon, dir: &Path, args: &[&str]) -> Output {
     assert!(
         !dir.join(".txtodo").join("txtodod.sock").exists(),
@@ -339,8 +350,8 @@ fn sub_ls_until(daemon: &GlobalDaemon, ws: &Path, want: &str) -> String {
 fn blame_undo_checkout_sub_and_conflicts_follow_a_custom_root_list() {
     let state = tempfile::tempdir().unwrap();
     let daemon = GlobalDaemon::spawn(state.path());
-    // A tagged line: `blame` reads the task id from the text, which a sidecar workspace never
-    // carries (a pre-existing blame limit, not this test's subject).
+    // The line keeps an old `id:` tag; `blame` asks the daemon for the line's id anyway
+    // (`FileContents.task_ids`), since a Sidecar workspace's ids are not in the text.
     let ws = tempfile::tempdir().unwrap();
     std::fs::write(ws.path().join("txtodo.toml"), "todo_file = \"work.txt\"\n").unwrap();
     std::fs::write(

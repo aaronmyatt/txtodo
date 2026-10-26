@@ -169,6 +169,35 @@ async fn a_peer_says_where_its_sync_is_stuck_and_whether_it_is_parked() {
     );
 }
 
+/// Task `peer-prune`: a parked peer can never be reached without a re-pair, so the count of ops not
+/// yet reflected leaves it out; with every peer parked there is nothing to be pending against.
+#[tokio::test]
+async fn a_parked_peer_is_left_out_of_the_pending_count() {
+    let dir = tempfile::tempdir().unwrap();
+    touch(&dir.path().join("todo.txt"), "one\ntwo\n");
+    let clock = Arc::new(FakeClock::new(1_000));
+    let ws = Workspace::open(dir.path(), clock.clone() as Arc<dyn Clock>)
+        .unwrap_or_else(|e| panic!("{e}"));
+    // Never saw the adoption ops (at 1_000): pending while reachable.
+    register_peer(&ws, 1, 500);
+    clock.advance_ms(5_500);
+    for _ in 0..crate::peer_keys::PARK_AFTER {
+        ws.peer_keys()
+            .note_failure(Some(device(1)), crate::peer_keys::WRONG_GROUP);
+    }
+    let svc = TxtodoService::new(Arc::new(RwLock::new(ws)));
+
+    let resp = svc
+        .sync_status_impl(Request::new(pb::SyncStatusRequest { workspace: None }))
+        .await
+        .unwrap()
+        .into_inner();
+
+    assert_eq!(resp.peers.len(), 1, "still listed");
+    assert!(resp.peers[0].parked);
+    assert_eq!(resp.pending_ops, 0, "but not counted");
+}
+
 /// Task sync-divergence-check/protocol-mismatch: a peer on another sync protocol is named beside
 /// ours, and a peer that greeted reads as the same protocol (0).
 #[tokio::test]
@@ -216,5 +245,51 @@ async fn a_peer_on_another_protocol_is_named_beside_ours() {
             splits[0].since_ms
         ),
         (split_ws.to_string().as_str(), "todo.txt", 4_000)
+    );
+}
+
+/// Task `peer-prune`: a removed row says why, by whom and when; a live one carries none of it.
+#[tokio::test]
+async fn a_removed_row_in_the_device_list_says_why_by_whom_and_when() {
+    let dir = tempfile::tempdir().unwrap();
+    touch(&dir.path().join("todo.txt"), "one\n");
+    let clock = Arc::new(FakeClock::new(1_000));
+    let ws = Workspace::open(dir.path(), clock as Arc<dyn Clock>).unwrap_or_else(|e| panic!("{e}"));
+    register_peer(&ws, 1, 500);
+    register_peer(&ws, 2, 500);
+    ws.remove_device(device(1), 2_000).unwrap();
+    let me = ws.device().ulid().to_string();
+    let svc = TxtodoService::new(Arc::new(RwLock::new(ws)));
+
+    let devices = svc
+        .device_list_impl(Request::new(pb::DeviceListRequest { workspace: None }))
+        .await
+        .unwrap()
+        .into_inner()
+        .devices;
+    let gone = devices
+        .iter()
+        .find(|d| d.id == device(1).ulid().to_string());
+    let gone = gone.expect("the removed row is listed");
+    assert!(gone.removed);
+    assert_eq!(
+        (
+            gone.removed_reason.as_str(),
+            gone.removed_by.as_str(),
+            gone.removed_at_ms
+        ),
+        ("manual", me.as_str(), 2_000)
+    );
+    let kept = devices
+        .iter()
+        .find(|d| d.id == device(2).ulid().to_string());
+    let kept = kept.expect("the kept row is listed");
+    assert_eq!(
+        (
+            kept.removed_reason.as_str(),
+            kept.removed_by.as_str(),
+            kept.removed_at_ms
+        ),
+        ("", "", 0)
     );
 }

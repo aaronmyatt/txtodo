@@ -24,10 +24,10 @@ that entry below.
   a column since ADR 0039 (migration 0009, unique per device): an op of ours takes the next number
   at insert, a peer's op the number its sync batch gave (`commit_change_numbered`); the head is the
   highest. Rows from before 0009 were numbered by their HLC rank then.
-- Mirror (`mirror.rs`): `put_mirror(file, snapshot, seq)` / `get_mirror(file)` — the Loro
-  snapshot as of a log position. Only `notes.md` documents use it since ADR 0038; old todo.txt
-  rows stay, unread. The review-flag API went with same-word review (ADR 0038); the
-  `review_flags` table and its old rows stay, unread. `CommitExtras` is fingerprints and source.
+- Mirror (`mirror.rs`): `put_mirror(file, snapshot, seq)` / `get_mirror(file)` — the Loro snapshot
+  as of a log position; notes.md only since ADR 0038 (a todo.txt commit lands none; old todo.txt
+  rows stay, ignored). The review flags API (`raise_flag`, `open_flags`, `clear_flag`,
+  `CommitExtras::clear`) went with conflict review A; the `review_flags` table stays, ignored.
 - Projections: `put_projection(&Projection)` / `get_projection(file)`; `MAX_PROJECTION_BYTES`.
 - Snapshots: `put_snapshot(file, &Snapshot { seq, state })` / `latest_snapshot(file)`.
 - Meta: `meta_set(key, bytes)` / `meta_get(key)` — device id, later encrypted keys.
@@ -64,7 +64,16 @@ that entry below.
   actual backstop against two active rows for the same root — the caller is expected to check
   `find_active_by_root` first), `find_active_by_root(root)`, `get(id)`, `list_active()` (≤
   `MAX_WORKSPACES_PER_READ`, oldest-registered first), `remove(id, at_ms)` (idempotent tombstone,
-  the same upsert idiom as `remove_device`; `false` only for a wholly unknown id). `WorkspaceId` is
+  the same upsert idiom as `remove_device`; `false` only for a wholly unknown id), `root_was_removed(root)` (a folder taken off the
+  registry, for the repo scan to leave alone), `restore(id,
+  at_ms)` (task two-kinds-of-workspace: a removed row comes back under the same id and root, for a
+  named list whose id is its name's; `false` for an unknown or active id). `WorkspaceId` is
+  Repo-scan state (task two-kinds-of-workspace, `registry_scan.rs`): `scan_roots()` (oldest first, at
+  most `MAX_SCAN_ROOTS`), `add_scan_root(root, at_ms)` / `remove_scan_root(root)` (absolute paths only),
+  `seed_scan_roots(defaults, at_ms)` (gives a registry its default roots once, even after the person
+  removed them all), `last_scan_ms()` / `set_last_scan_ms(at_ms)`. Two tables made with `CREATE TABLE IF
+  NOT EXISTS` at every open, **not** a migration: `user_version` stays 2 so an older build still opens
+  the file. `WorkspaceId` is
   a ULID newtype, minted (never derived from the path) the same way `DeviceId` is — kept in this
   crate rather than promoted to `txtodo-model` for now, since only this crate and `txtodo-daemon`
   need it (`tasks/daemon-workspace-registry/notes.md` has the reasoning). `root` is stored as the

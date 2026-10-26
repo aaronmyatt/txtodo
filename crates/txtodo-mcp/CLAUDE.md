@@ -14,6 +14,25 @@ Tools per design §6.3, resources §6.4, `token` module.
   `txtodo_daemon_launch::ensure_daemon` before dialing the socket (task daemon-always-available);
   `grpc_backend.rs`/`global_socket.rs` stay pure and still don't import that crate.
 
+## Fallback note
+
+A server started in a folder the daemon does not know (or in no workspace) sends calls that name no
+`workspace` to the default list. `main.rs` builds a note for that (`aim_at_the_current_workspace`),
+`McpServer::with_fallback_note` holds it, and `fallback.rs` appends it to each such result as a last
+text block (task two-kinds-of-workspace). stderr still gets the same words; agent hosts hide that.
+A folder is served as itself, with no note, when the daemon knows it or it is a git checkout's root
+(`fallback.rs::serves_here`): a repo is never offered to a peer (ADR 0043), so naming it, which
+registers it on the first call, tells nobody its name. A plain folder that is not registered still
+falls back with the note (task mcp-cwd-autoregister).
+
+## The `list` argument
+
+Every tool that takes a `workspace` also takes `list`: a named list (task two-kinds-of-workspace),
+by the name it shows or the name it was made under. `list_param.rs` adds the property to each tool's
+schema when the server is built, and `call_tool` replaces it with the list's `workspace` id before
+any tool runs (`txtodo_workspace_paths::pick_list`, the rule the CLI and daemon share). A name that
+is no list, or a list beside a workspace, is `invalid_params`; the refusal names the lists there are.
+
 ## Task ids
 
 A task's id comes from the daemon, not from the line: `GetFile` answers one id per line
@@ -27,6 +46,8 @@ it. The first `id:` word in the text is only the fallback for a daemon that sent
 The registered tool set is a closed allow-list (`tests/it/smoke.rs`'s `EXPECTED_TOOLS`, an exact match).
 These `txtodo` commands are deliberately not in it, and `no_tool_mirrors_a_trust_boundary_cli_command`
 fails if a tool ever borrows their names: `workspace add|remove` (the device-global registry),
+`lists new|rename|rm|import` (the named lists that sync to every one of the user's devices: a tool may
+use one through its `list` argument, `list_param.rs`, and never make, rename or remove one),
 `pair` (cross-device pairing), `device remove` (group-key rotation, device trust), `identity migrate`
 (rewrites every file of a workspace), `fmt` (rewrites lines it was not asked about; held until
 agent-principal attribution covers a whole-file rewrite), and the local `bundle`, `daemon`,

@@ -26,6 +26,8 @@ pub fn needs_daemon(command: &Command) -> bool {
             | Command::Prune { .. }
             | Command::Device { .. }
             | Command::Workspace { .. }
+            | Command::Lists { .. }
+            | Command::Repos { .. }
             | Command::Bundle { .. }
     )
 }
@@ -43,15 +45,7 @@ pub fn ensure_daemon_then_dispatch(
     command: &Command,
     env: &Env,
 ) -> Result<(), CliError> {
-    if !txtodo_daemon_launch::autostart_disabled() {
-        let cfg = txtodo_daemon_launch::LaunchConfig::new(config::global_socket_path(env));
-        if let Ok(rt) = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-        {
-            let _ = rt.block_on(txtodo_daemon_launch::ensure_daemon(&cfg));
-        }
-    }
+    start_global(env);
     match client::select(&ctx.paths.dir, false, env) {
         Ok(client::Mode::Daemon(mut daemon)) => {
             match crate::register_guard::check(command, &ctx.paths, &mut daemon)? {
@@ -60,6 +54,21 @@ pub fn ensure_daemon_then_dispatch(
             }
         }
         _ => dispatch(ctx, command),
+    }
+}
+
+/// Tries to start the global daemon, unless autostart is off. Any failure is swallowed, so the
+/// caller's next look at the socket decides what to say (see [`ensure_daemon_then_dispatch`]).
+pub fn start_global(env: &Env) {
+    if txtodo_daemon_launch::autostart_disabled() {
+        return;
+    }
+    let cfg = txtodo_daemon_launch::LaunchConfig::new(config::global_socket_path(env));
+    if let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        let _ = rt.block_on(txtodo_daemon_launch::ensure_daemon(&cfg));
     }
 }
 

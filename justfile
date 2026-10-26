@@ -48,13 +48,6 @@ boundaries:
 deny:
     cargo deny check
 
-# the full crdt-sync-simulator sweep (plan M4 acceptance: 1000 runs, random seeds each time);
-# CI runs 20 fixed seeds (`slow_twenty_fixed_seeds_converge`; local nextest skips `slow_*`) —
-# this is deliberately not part of `check`. The sim is the `sim` module of crdt's tests/it binary.
-# TXTODO_SIM_SEED=<n> reruns exactly one seed to reproduce a failure this prints.
-sim:
-    cargo test -p txtodo-crdt --release --test it sim:: -- --ignored --nocapture
-
 # fuzz <target> <secs>: plan M0 wants this; cargo-fuzz needs nightly and is installed at M1, not by /setup
 fuzz target secs="60":
     PATH="$(dirname "$(rustup which --toolchain nightly cargo)"):$PATH" cargo fuzz run --fuzz-dir crates/txtodo-core/fuzz {{target}} -- -max_total_time={{secs}}
@@ -236,6 +229,12 @@ repoint-service:
 # Check the relay node id survives a restart on the macOS keychain (prints PASS/FAIL)
 check-relay-id-keychain timeout="180":
     scripts/check-relay-id-keychain.sh --timeout-s {{timeout}}
+
+# By-hand check (task two-kinds-of-workspace, ADR 0043): on a scratch daemon that never touches your
+# real data, a list line lands in the lists folder and a repo's change shows in `git diff`.
+# Check the two kinds of workspace (prints ok or the first failure)
+check-two-kinds:
+    scripts/check-two-kinds.sh
 
 # Desktop visual goldens (tasks/desktop-visual-regression): the light and dark Playwright projects
 # against the browser mock, which starts its own dev server. `goldens-check` compares without

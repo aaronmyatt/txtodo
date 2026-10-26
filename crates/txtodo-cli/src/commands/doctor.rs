@@ -3,12 +3,17 @@
 //! transport. Seven fixed checks in a fixed order so scripts can index them, plus one row per
 //! known sync peer (plan M4 tasks/model-hlc-skew-guard), one per file a peer's sync is stuck on
 //! and per parked peer (`doctor_sync.rs`), and one per pair of registered workspaces that share
-//! lists (`doctor_overlap.rs`) — each says what fixes it, where something does.
+//! lists (`doctor_overlap.rs`), one per repo clone with no merge driver (`doctor_git.rs`) and one per Remote mirror
+//! (`doctor_mirrors.rs`) —
+//! each says what fixes it, where something does.
 //! Exit status 1 when any check fails. `--verbose` tails the daemon's JSON log when one exists.
 
 use crate::client::{self, Mode, SOCKET_REL};
 use crate::commands::doctor_clock::{clock_check, config_check};
+use crate::commands::doctor_git::{git_checks, repos_check};
+use crate::commands::doctor_mirrors::mirror_checks;
 use crate::commands::doctor_overlap::{overlap_checks, registered_workspaces};
+use crate::commands::doctor_prune::{dropped_check, pruned_checks};
 use crate::commands::doctor_sync::sync_checks;
 use crate::commands::doctor_transport::{offers_check, transport_check};
 use crate::commands::doctor_version::version_check;
@@ -329,7 +334,9 @@ pub fn run(ctx: &Ctx, verbose: bool) -> Result<(), CliError> {
     // After the fixed seven, so their order and count stay what scripts already read.
     checks.push(version_check(health.as_ref()));
     checks.push(offers_check(health.as_ref()));
+    checks.extend(dropped_check(health.as_ref()));
     checks.extend(peer_checks(&devices));
+    checks.extend(pruned_checks(&devices));
     let workspaces = registered_workspaces(state.daemon.as_deref_mut());
     checks.extend(sync_checks(state.sync.as_ref(), &devices, &workspaces));
     checks.extend(other_workspace_checks(
@@ -338,6 +345,9 @@ pub fn run(ctx: &Ctx, verbose: bool) -> Result<(), CliError> {
         &ctx.paths.dir,
     ));
     checks.extend(overlap_checks(&workspaces));
+    checks.extend(mirror_checks(&workspaces));
+    checks.extend(git_checks(&workspaces));
+    checks.extend(repos_check(state.daemon.as_deref_mut(), &workspaces));
     checks.push(skill_check());
     checks.extend(super::layout::doctor_checks(
         ctx,
