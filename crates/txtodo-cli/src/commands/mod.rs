@@ -32,6 +32,7 @@ pub mod merge_driver;
 pub mod move_copy;
 pub mod notices;
 pub mod pair;
+mod prompt;
 pub mod refdir;
 mod removal;
 pub mod repos;

@@ -324,13 +324,7 @@ fn confirm(prompt: &str) -> Result<bool, CliError> {
     let n = std::io::stdin()
         .read_line(&mut line)
         .map_err(CliError::Io)?;
-    Ok(n > 0 && is_explicit_yes(&line))
-}
-
-/// The pure "is this an explicit yes" rule [`confirm`] applies to one line of input.
-fn is_explicit_yes(line: &str) -> bool {
-    let answer = line.trim().to_ascii_lowercase();
-    answer == "y" || answer == "yes"
+    Ok(n > 0 && super::prompt::is_yes(&line))
 }
 
 fn to_json(code: &PairingCode) -> Result<String, CliError> {

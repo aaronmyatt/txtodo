@@ -4,8 +4,6 @@
 //! `Delete` that already exists, after a confirm. Keeping both copies means editing one so they
 //! differ: there is no dismiss. Split out of `conflicts.rs` for its file budget.
 
-use std::io::Write;
-
 use crate::client::Daemon;
 use crate::{CliError, json};
 use txtodo_proto::v1 as pb;
@@ -45,7 +43,9 @@ pub(super) fn run_delete(
         eprintln!("TODO: line {line} is not a duplicate; `txtodo conflicts` lists them.");
         return Err(CliError::Reported);
     };
-    if !yes && !confirm(&format!("Delete line {line}? The other copy stays."))? {
+    if !yes
+        && !crate::commands::prompt::confirm(&format!("Delete line {line}? The other copy stays."))?
+    {
         println!("TODO: nothing deleted.");
         return Ok(());
     }
@@ -71,7 +71,7 @@ pub(super) fn run_keep_newest(daemon: &mut Daemon, file: &str, yes: bool) -> Res
         groups.len(),
         if groups.len() == 1 { "" } else { "s" }
     );
-    if !yes && !confirm(&question)? {
+    if !yes && !crate::commands::prompt::confirm(&question)? {
         println!("TODO: nothing deleted.");
         return Ok(());
     }
@@ -100,21 +100,6 @@ fn delete(copy: &pb::DuplicateTask) -> pb::Mutation {
             leave_blank: false,
         })),
     }
-}
-
-/// `[y/N]` on stderr, so `--json` output stays clean; only `y` or `yes` is a yes, and a closed
-/// stdin is a no (the same rule as `workspace rejoin`).
-fn confirm(question: &str) -> Result<bool, CliError> {
-    eprint!("{question} [y/N] ");
-    std::io::stderr().flush().ok();
-    let mut answer = String::new();
-    std::io::stdin()
-        .read_line(&mut answer)
-        .map_err(CliError::Io)?;
-    Ok(matches!(
-        answer.trim().to_ascii_lowercase().as_str(),
-        "y" | "yes"
-    ))
 }
 
 /// The line every copy shares, read from the file at the first copy's line.
