@@ -140,7 +140,7 @@
 				onkeydown={onSearchKeydown}
 			/>
 			{#if pill}
-				<span class="pill" role="status" aria-live="polite" aria-label="Matching lines">{pill}</span>
+				<span class="count" role="status" aria-live="polite" aria-label="Matching lines">{pill}</span>
 			{/if}
 			<kbd>/</kbd>
 		</label>
@@ -259,7 +259,7 @@
 		font: inherit;
 	}
 
-	.pill {
+	.count {
 		flex: none;
 		padding: 0.05rem 0.5rem;
 		border-radius: 999px;
